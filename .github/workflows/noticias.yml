@@ -230,7 +230,13 @@ jobs:
           from googleapiclient.discovery import build
           from googleapiclient.http import MediaFileUpload
 
-          creds_b64 = os.environ["GDRIVE_CREDENTIALS"]
+          # Limpia y arregla el base64
+          creds_b64 = os.environ["GDRIVE_CREDENTIALS"].strip().replace("\n", "").replace(" ", "")
+          # Añade padding si falta
+          missing_padding = len(creds_b64) % 4
+          if missing_padding:
+              creds_b64 += "=" * (4 - missing_padding)
+
           creds_json = base64.b64decode(creds_b64).decode("utf-8")
           creds_info = json.loads(creds_json)
 
