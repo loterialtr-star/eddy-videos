@@ -1,0 +1,182 @@
+[
+ {
+  "id": 0,
+  "cita": "Génesis 12",
+  "historia": "Abram sale de su tierra confiando en la promesa de Dios",
+  "mensaje": "Dios no siempre te muestra todo el camino; te pide dar el primer paso con fe."
+ },
+ {
+  "id": 1,
+  "cita": "Éxodo 14",
+  "historia": "El paso del mar Rojo",
+  "mensaje": "Cuando no ves salida, Dios abre caminos donde no los hay."
+ },
+ {
+  "id": 2,
+  "cita": "Josué 6",
+  "historia": "Las murallas de Jericó",
+  "mensaje": "La obediencia paciente vence obstáculos que parecen imposibles."
+ },
+ {
+  "id": 3,
+  "cita": "Rut 1",
+  "historia": "Rut se queda con Noemí",
+  "mensaje": "La lealtad y el amor fiel también son actos de fe."
+ },
+ {
+  "id": 4,
+  "cita": "1 Samuel 17",
+  "historia": "David frente a Goliat",
+  "mensaje": "Tu fuerza no está en el tamaño del problema, sino en el tamaño de tu Dios."
+ },
+ {
+  "id": 5,
+  "cita": "1 Reyes 17",
+  "historia": "Elías y la viuda de Sarepta",
+  "mensaje": "Lo poco en manos de Dios alcanza para muchos días."
+ },
+ {
+  "id": 6,
+  "cita": "Daniel 6",
+  "historia": "Daniel en el foso de los leones",
+  "mensaje": "La fidelidad diaria a Dios te sostiene en la prueba."
+ },
+ {
+  "id": 7,
+  "cita": "Daniel 3",
+  "historia": "Los tres jóvenes en el horno de fuego",
+  "mensaje": "Dios camina contigo dentro del fuego, no solo después."
+ },
+ {
+  "id": 8,
+  "cita": "Jonás 1-3",
+  "historia": "Jonás y la segunda oportunidad",
+  "mensaje": "Dios da nuevas oportunidades a quien regresa a Él."
+ },
+ {
+  "id": 9,
+  "cita": "Job 1-42",
+  "historia": "La paciencia de Job",
+  "mensaje": "En medio del dolor, Dios sigue siendo fiel y restaura."
+ },
+ {
+  "id": 10,
+  "cita": "Salmo 23",
+  "historia": "El Señor es mi pastor",
+  "mensaje": "Con Dios como pastor, no te falta lo que de verdad necesitas."
+ },
+ {
+  "id": 11,
+  "cita": "Mateo 14",
+  "historia": "Jesús camina sobre el agua y Pedro",
+  "mensaje": "Si miras a Jesús, puedes caminar sobre tus tormentas."
+ },
+ {
+  "id": 12,
+  "cita": "Marcos 4",
+  "historia": "Jesús calma la tempestad",
+  "mensaje": "Jesús tiene autoridad sobre la tormenta que hoy te asusta."
+ },
+ {
+  "id": 13,
+  "cita": "Lucas 15",
+  "historia": "El hijo pródigo",
+  "mensaje": "El Padre siempre espera con los brazos abiertos."
+ },
+ {
+  "id": 14,
+  "cita": "Lucas 10",
+  "historia": "El buen samaritano",
+  "mensaje": "Amar al prójimo es detenerse a ayudar, aunque cueste."
+ },
+ {
+  "id": 15,
+  "cita": "Juan 6",
+  "historia": "La multiplicación de los panes",
+  "mensaje": "Dios multiplica lo poco que pones en sus manos."
+ },
+ {
+  "id": 16,
+  "cita": "Juan 11",
+  "historia": "La resurrección de Lázaro",
+  "mensaje": "Para Dios nunca es demasiado tarde."
+ },
+ {
+  "id": 17,
+  "cita": "Lucas 19",
+  "historia": "Zaqueo se encuentra con Jesús",
+  "mensaje": "Un encuentro con Jesús cambia una vida para siempre."
+ },
+ {
+  "id": 18,
+  "cita": "Marcos 5",
+  "historia": "La mujer que tocó el manto",
+  "mensaje": "La fe que se acerca a Jesús encuentra sanidad y paz."
+ },
+ {
+  "id": 19,
+  "cita": "Lucas 23",
+  "historia": "El ladrón en la cruz",
+  "mensaje": "La gracia de Dios alcanza hasta el último momento."
+ },
+ {
+  "id": 20,
+  "cita": "Juan 21",
+  "historia": "Pedro restaurado",
+  "mensaje": "Tus caídas no son el final cuando Jesús te restaura."
+ },
+ {
+  "id": 21,
+  "cita": "Hechos 16",
+  "historia": "Pablo y Silas cantan en la cárcel",
+  "mensaje": "La alabanza en la noche abre puertas cerradas."
+ },
+ {
+  "id": 22,
+  "cita": "Génesis 37-50",
+  "historia": "José, de la cisterna al palacio",
+  "mensaje": "Dios transforma lo que otros hicieron para mal en bien."
+ },
+ {
+  "id": 23,
+  "cita": "1 Samuel 1",
+  "historia": "La oración de Ana",
+  "mensaje": "Dios escucha la oración sincera del corazón."
+ },
+ {
+  "id": 24,
+  "cita": "Nehemías 2-6",
+  "historia": "Nehemías reconstruye los muros",
+  "mensaje": "Con oración y trabajo, lo derrumbado se levanta."
+ },
+ {
+  "id": 25,
+  "cita": "Ester 4",
+  "historia": "Ester se presenta ante el rey",
+  "mensaje": "Quizás estás donde estás para un momento como este."
+ },
+ {
+  "id": 26,
+  "cita": "Mateo 6",
+  "historia": "No se afanen por el mañana",
+  "mensaje": "Busca primero a Dios y Él cuidará lo demás."
+ },
+ {
+  "id": 27,
+  "cita": "Filipenses 4",
+  "historia": "Todo lo puedo en Cristo",
+  "mensaje": "Cristo te da fuerzas para enfrentar cada situación."
+ },
+ {
+  "id": 28,
+  "cita": "Isaías 40",
+  "historia": "Los que esperan en el Señor",
+  "mensaje": "Esperar en Dios renueva tus fuerzas como las del águila."
+ },
+ {
+  "id": 29,
+  "cita": "Mateo 7",
+  "historia": "La casa sobre la roca",
+  "mensaje": "Construye tu vida sobre la Palabra y resistirá cualquier tormenta."
+ }
+]

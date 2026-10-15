@@ -1,0 +1,8 @@
+{
+  "rd": [
+    {"nombre": "Presidencia de la República Dominicana", "corto": "la Presidencia de la República", "url": "https://presidencia.gob.do/rss.xml"}
+  ],
+  "mundo": [
+    {"nombre": "Noticias ONU", "corto": "Noticias ONU", "url": "https://news.un.org/feed/subscribe/es/news/all/rss.xml"}
+  ]
+}

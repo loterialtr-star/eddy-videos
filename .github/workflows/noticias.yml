@@ -1,0 +1,41 @@
+name: Video de noticias
+on:
+  workflow_dispatch:
+  schedule:  # horas pico RD (UTC-4): 7:00, 12:00, 18:00, 21:00  -> desactivado hasta confirmacion
+    - cron: "0 11,16,22 * * *"
+    - cron: "0 1 * * *"
+concurrency: noticias
+jobs:
+  video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env: { SALIDA: salida, TZ: America/Santo_Domingo }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+      - run: pip install -r requirements.txt
+      - name: Armar video
+        run: python robot/armar.py
+      - name: Controles automaticos (si falla, no se publica)
+        run: python robot/verificar.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: video-noticias, path: "salida/*.*", retention-days: 7 }
+      - name: Publicar en YouTube (apagado hasta que Eddy conecte la cuenta)
+        env:
+          PUBLICAR: ${{ vars.PUBLICAR }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+        run: python robot/publicar_youtube.py
+        continue-on-error: true
+      - name: Publicar en pagina de noticias de Facebook (NUNCA Primero Dios; apagado)
+        env:
+          PUBLICAR: ${{ vars.PUBLICAR_FB_NOTICIAS }}
+          TIPO: noticias
+          FB_PAGE_ID: ${{ secrets.FB_NOTICIAS_PAGE_ID }}
+          FB_PAGE_TOKEN: ${{ secrets.FB_NOTICIAS_TOKEN }}
+          FB_PRIMERO_DIOS_ID: ${{ secrets.FB_PRIMERO_DIOS_ID }}
+        run: python robot/publicar_facebook.py
