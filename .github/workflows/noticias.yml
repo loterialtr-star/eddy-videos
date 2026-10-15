@@ -2,11 +2,8 @@ name: Video de noticias
 on:
   workflow_dispatch:
   schedule:
-    # Horarios pico Hora RD / La Paz (UTC-4)
-    - cron: '0 10 * * *'    # 06:00 AM RD
-    - cron: '42 11 * * *'   # 07:42 AM RD
-    - cron: '17 23 * * *'   # 07:17 PM RD
-    - cron: '0 1 * * *'     # 09:00 PM RD
+    # Se ejecuta automáticamente cada 4 horas
+    - cron: '0 */4 * * *'
 
 concurrency: noticias
 
@@ -69,6 +66,14 @@ jobs:
           FB_PAGE_TOKEN: ${{ secrets.FB_NOTICIAS_TOKEN }}
           FB_PRIMERO_DIOS_ID: ${{ secrets.FB_PRIMERO_DIOS_ID }}
         run: python robot/publicar_facebook.py
+
+      - name: Subir a Google Drive
+        uses: adityak74/google-drive-upload-git-action@main
+        with:
+          credentials: ${{ secrets.GDRIVE_CREDENTIALS }}
+          folderId: ${{ vars.GOOGLE_DRIVE_FOLDER_ID }}
+          filename: "salida/*.mp4"
+          overwrite: "true"
 - name: Subir a Google Drive
         uses: adityak74/google-drive-upload-git-action@main
         with:
