@@ -1,4 +1,4 @@
- name: Noticias con Eddy - TELEMUNDO + CORREO
+name: Noticias con Eddy - TELEMUNDO
 
 on:
   workflow_dispatch:
@@ -214,43 +214,6 @@ jobs:
 
       - name: Generar vídeo
         run: python robot/noticiero.py
-
-      - name: Enviar vídeo por correo
-        env:
-          GMAIL_USER: loterialtr@gmail.com
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-        run: |
-          python - << 'PY'
-          import smtplib, os
-          from email.mime.multipart import MIMEMultipart
-          from email.mime.base import MIMEBase
-          from email.mime.text import MIMEText
-          from email import encoders
-
-          titulo = open("salida/caption.txt", encoding="utf-8").read().strip()
-
-          msg = MIMEMultipart()
-          msg["From"] = os.environ["GMAIL_USER"]
-          msg["To"] = os.environ["GMAIL_USER"]
-          msg["Subject"] = f"Noticias con Eddy - {titulo[:60]}"
-
-          msg.attach(MIMEText(f"Nuevo vídeo generado:\n\n{titulo}", "plain"))
-
-          with open("salida/ultima_noticia.mp4", "rb") as f:
-              part = MIMEBase("application", "octet-stream")
-              part.set_payload(f.read())
-              encoders.encode_base64(part)
-              part.add_header("Content-Disposition", "attachment; filename=noticia.mp4")
-              msg.attach(part)
-
-          server = smtplib.SMTP("smtp.gmail.com", 587)
-          server.starttls()
-          server.login(os.environ["GMAIL_USER"], os.environ["GMAIL_APP_PASSWORD"])
-          server.send_message(msg)
-          server.quit()
-
-          print("✅ Vídeo enviado a tu correo")
-          PY
 
       - name: Subir artefactos (respaldo)
         uses: actions/upload-artifact@v4
