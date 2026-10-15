@@ -1,4 +1,4 @@
-name: Noticias con Eddy - TELEMUNDO
+name: Noticias con Eddy - TELEMUNDO + YOUTUBE
 
 on:
   workflow_dispatch:
@@ -40,6 +40,9 @@ jobs:
           moviepy==1.0.3
           requests
           imageio-ffmpeg
+          google-api-python-client
+          google-auth-httplib2
+          google-auth-oauthlib
           REQ
 
           pip install -r requirements.txt
@@ -214,6 +217,53 @@ jobs:
 
       - name: Generar vídeo
         run: python robot/noticiero.py
+
+      - name: Publicar en YouTube
+        env:
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+        run: |
+          python - << 'PY'
+          import os
+          from googleapiclient.discovery import build
+          from googleapiclient.http import MediaFileUpload
+          from google.oauth2.credentials import Credentials
+
+          creds = Credentials(
+              None,
+              refresh_token=os.environ["YT_REFRESH_TOKEN"],
+              token_uri="https://oauth2.googleapis.com/token",
+              client_id=os.environ["YT_CLIENT_ID"],
+              client_secret=os.environ["YT_CLIENT_SECRET"]
+          )
+
+          youtube = build("youtube", "v3", credentials=creds)
+
+          with open("salida/caption.txt", encoding="utf-8") as f:
+              titulo = f.read().strip()[:95]
+
+          descripcion = f"{titulo}\n\nNoticias con Eddy | República Dominicana\n#Noticias #RD #EddyInfante #UltimaHora"
+
+          request = youtube.videos().insert(
+              part="snippet,status",
+              body={
+                  "snippet": {
+                      "title": titulo,
+                      "description": descripcion,
+                      "tags": ["noticias", "republica dominicana", "eddy infante", "ultima hora", "rd"],
+                      "categoryId": "25"
+                  },
+                  "status": {
+                      "privacyStatus": "public",
+                      "selfDeclaredMadeForKids": False
+                  }
+              },
+              media_body=MediaFileUpload("salida/ultima_noticia.mp4", chunksize=-1, resumable=True)
+          )
+          response = request.execute()
+          print("✅ Publicado en YouTube:", "https://youtu.be/" + response["id"])
+          PY
 
       - name: Subir artefactos (respaldo)
         uses: actions/upload-artifact@v4
