@@ -74,10 +74,3 @@ jobs:
           folderId: ${{ vars.GOOGLE_DRIVE_FOLDER_ID }}
           filename: "salida/*.mp4"
           overwrite: "true"
-- name: Subir a Google Drive
-        uses: adityak74/google-drive-upload-git-action@main
-        with:
-          credentials: ${{ secrets.GDRIVE_CREDENTIALS }}
-          folderId: ${{ vars.GOOGLE_DRIVE_FOLDER_ID }}
-          filename: "salida/*.mp4"
-          overwrite: "true"
