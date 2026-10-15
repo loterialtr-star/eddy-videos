@@ -1,4 +1,5 @@
 name: Video de noticias
+
 on:
   workflow_dispatch:
   schedule:
@@ -7,29 +8,47 @@ on:
     - cron: '42 11 * * *'   # 07:42 AM RD
     - cron: '17 23 * * *'   # 07:17 PM RD
     - cron: '0 1 * * *'     # 09:00 PM RD
+
 concurrency: noticias
+
 jobs:
   video:
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    env: { SALIDA: salida, TZ: America/Santo_Domingo }
+    env:
+      SALIDA: salida
+      TZ: America/Santo_Domingo
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
-        with: { python-version: "3.12" }
+        with:
+          python-version: "3.12"
+
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+
       - run: pip install -r requisitos.txt
+
       - name: Armar video
         run: python robot/noticiero.py
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
       - name: Controles automaticos (si falla, no se publica)
         run: python robot/verificar.py
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
       - uses: actions/upload-artifact@v4
         if: always()
-        with: { name: video-noticias, path: |
+        with:
+          name: video-noticias
+          path: |
             salida/*.*
-            salida/imagenes/, retention-days: 7 }
+            salida/imagenes/
+          retention-days: 7
+
       - name: Publicar en YouTube (apagado hasta que Eddy conecte la cuenta)
         env:
           PUBLICAR: ${{ vars.PUBLICAR }}
@@ -38,6 +57,7 @@ jobs:
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
         run: python robot/publicar_youtube.py
         continue-on-error: true
+
       - name: Publicar en pagina de noticias de Facebook (NUNCA Primero Dios; apagado)
         env:
           PUBLICAR: ${{ vars.PUBLICAR_FB_NOTICIAS }}
