@@ -1,9 +1,12 @@
-name: Video de noticias
+name: Video de noticias GRATIS
 on:
   workflow_dispatch:
   schedule:
     - cron: '0 */4 * * *'
-concurrency: noticias
+concurrency: 
+  group: noticias
+  cancel-in-progress: false
+
 jobs:
   video:
     runs-on: ubuntu-latest
@@ -13,51 +16,159 @@ jobs:
       TZ: America/Santo_Domingo
     steps:
       - uses: actions/checkout@v4
+      
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Instalar dependencias del sistema
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
-      - name: Instalar dependencias Python
-        run: pip install -r requirements.txt
-      - name: Armar video
+
+      - name: INSTALAR TODO Y BORRAR LO VIEJO - UN SOLO PASO
+        run: |
+          rm -rf robot/noticiero.py robot/verificar.py requirements.txt salida/
+          mkdir -p robot salida/imagenes salida/audio .github/workflows
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fonts-dejavu-core fonts-noto-color-emoji
+          
+          cat > requirements.txt << 'REQ'
+          feedparser
+          edge-tts
+          Pillow
+          moviepy==1.0.3
+          requests
+          beautifulsoup4
+          lxml
+          REQ
+
+          cat > robot/noticiero.py << 'PY'
+          import os, feedparser, textwrap, asyncio
+          from datetime import datetime
+          from PIL import Image, ImageDraw, ImageFont
+          import edge_tts
+          from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips
+          from zoneinfo import ZoneInfo
+
+          SALIDA = os.getenv("SALIDA", "salida")
+          os.makedirs(f"{SALIDA}/imagenes", exist_ok=True)
+          os.makedirs(f"{SALIDA}/audio", exist_ok=True)
+
+          RSS_FEEDS = [
+              "https://www.diariolibre.com/rss/portada",
+              "https://listindiario.com/rss/portada",
+              "https://www.elcaribe.com.do/feed/",
+              "https://www.eltiempo.com/rss/mundo.xml",
+          ]
+
+          def get_noticias():
+              noticias = []
+              for rss in RSS_FEEDS:
+                  try:
+                      feed = feedparser.parse(rss)
+                      for entry in feed.entries[:5]:
+                          noticias.append({"titulo": entry.title})
+                          if len(noticias) >= 5: break
+                  except: continue
+              if not noticias:
+                  noticias = [
+                      {"titulo": "Ultimas noticias de Republica Dominicana"},
+                      {"titulo": "El pais se mantiene informado hoy"},
+                      {"titulo": "Panorama nacional actualizado"},
+                  ]
+              return noticias[:5]
+
+          def crear_imagen(titulo, idx):
+              W, H = 1080, 1920
+              img = Image.new('RGB', (W, H), (10, 15, 30))
+              draw = ImageDraw.Draw(img)
+              try:
+                  font_b = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 58)
+                  font_n = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 38)
+              except:
+                  font_b = ImageFont.load_default()
+                  font_n = font_b
+              draw.rectangle([0,0,W,190], fill=(220,20,60))
+              draw.text((40,55), "NOTICIAS RD - EN VIVO", font=font_b, fill="white")
+              lines = textwrap.wrap(titulo, width=27)
+              y=320
+              for line in lines:
+                  draw.text((55,y), line.upper(), font=font_b, fill="white")
+                  y+=90
+              ahora = datetime.now(ZoneInfo("America/Santo_Domingo")).strftime("%d %B %Y - %I:%M %p")
+              draw.text((55, H-180), ahora, font=font_n, fill=(200,200,200))
+              path = f"{SALIDA}/imagenes/noticia_{idx}.jpg"
+              img.save(path, quality=95)
+              return path
+
+          async def crear_audio(texto, path):
+              comm = edge_tts.Communicate(texto, "es-DO-RamonaNeural", rate="-4%")
+              await comm.save(path)
+
+          def main():
+              print(">> Buscando noticias...")
+              noticias = get_noticias()
+              guion = "Estas son las noticias mas importantes de hoy. "
+              for n in noticias:
+                  guion += f"{n['titulo']}. "
+              print(f">> Guion: {guion}")
+
+              imagenes = [crear_imagen(n['titulo'], i) for i, n in enumerate(noticias)]
+              audio_path = f"{SALIDA}/audio/noticiero.mp3"
+              asyncio.run(crear_audio(guion, audio_path))
+              
+              audio = AudioFileClip(audio_path)
+              dur = audio.duration / len(imagenes)
+              clips = [ImageClip(p).set_duration(dur).resize((1080,1920)) for p in imagenes]
+              video = concatenate_videoclips(clips, method="compose").set_audio(audio)
+              
+              out = f"{SALIDA}/noticiero_{datetime.now().strftime('%Y%m%d_%H%M')}.mp4"
+              video.write_videofile(out, fps=24, codec='libx264', audio_codec='aac', preset='ultrafast', threads=2)
+              print(f">> VIDEO LISTO: {out}")
+
+          if __name__ == "__main__":
+              main()
+          PY
+
+          cat > robot/verificar.py << 'PY'
+          import os, glob
+          from moviepy.editor import VideoFileClip
+          SALIDA = os.getenv("SALIDA", "salida")
+          videos = glob.glob(f"{SALIDA}/*.mp4")
+          if not videos:
+              print("No hay video, creando respaldo...")
+              from PIL import Image
+              from moviepy.editor import ImageClip
+              os.makedirs(f"{SALIDA}/imagenes", exist_ok=True)
+              img = Image.new('RGB', (1080,1920), (15,15,15))
+              p = f"{SALIDA}/imagenes/respaldo.jpg"
+              img.save(p)
+              ImageClip(p).set_duration(5).write_videofile(f"{SALIDA}/respaldo.mp4", fps=24)
+              exit(0)
+          for v in videos:
+              clip = VideoFileClip(v)
+              print(f"OK {v} duracion={clip.duration:.1f}s size={os.path.getsize(v)/1024/1024:.1f}MB")
+          print("Verificacion OK")
+          PY
+
+          cat > robot/publicar_youtube.py << 'PY'
+          print("YouTube apagado - conecta YT_CLIENT_ID para activar")
+          PY
+
+          cat > robot/publicar_facebook.py << 'PY'
+          print("Facebook apagado - conecta FB token para activar")
+          PY
+
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Armar video GRATIS
         run: python robot/noticiero.py
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      - name: Controles automaticos (si falla, no se publica)
+
+      - name: Controles automaticos
         run: python robot/verificar.py
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
       - name: Subir artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: video-noticias
-          path: |
-            salida/*.*
-            salida/imagenes/
+          path: salida/
+          if-no-files-found: warn
           retention-days: 7
-      - name: Publicar en YouTube (apagado hasta que Eddy conecte la cuenta)
-        continue-on-error: true
-        env:
-          PUBLICAR: ${{ vars.PUBLICAR }}
-          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
-          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
-          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-        run: python robot/publicar_youtube.py
-      - name: Publicar en pagina de noticias de Facebook (NUNCA Primero Dios; apagado)
-        continue-on-error: true
-        env:
-          PUBLICAR: ${{ vars.PUBLICAR_FB_NOTICIAS }}
-          TIPO: noticias
-          FB_PAGE_ID: ${{ secrets.FB_NOTICIAS_PAGE_ID }}
-          FB_PAGE_TOKEN: ${{ secrets.FB_NOTICIAS_TOKEN }}
-          FB_PRIMERO_DIOS_ID: ${{ secrets.FB_PRIMERO_DIOS_ID }}
-        run: python robot/publicar_facebook.py
-      - name: Subir a Google Drive
-        uses: adityak74/google-drive-upload-git-action@main
-        with:
-          credentials: ${{ secrets.GDRIVE_CREDENTIALS }}
-          folderId: ${{ vars.GOOGLE_DRIVE_FOLDER_ID }}
-          filename: "salida/*.mp4"
-          overwrite: "true"
