@@ -1,4 +1,4 @@
-name: Noticias con Eddy - TELEMUNDO + DRIVE
+name: Noticias con Eddy - TELEMUNDO + CORREO
 
 on:
   workflow_dispatch:
@@ -19,7 +19,6 @@ jobs:
     env:
       SALIDA: salida
       TZ: America/Santo_Domingo
-      FOLDER_ID: 1irln1wOl_FBIOUFAL7d5JrRRU4mDQ8qv
 
     steps:
       - uses: actions/checkout@v4
@@ -41,9 +40,6 @@ jobs:
           moviepy==1.0.3
           requests
           imageio-ffmpeg
-          google-api-python-client
-          google-auth
-          google-auth-httplib2
           REQ
 
           pip install -r requirements.txt
@@ -219,43 +215,39 @@ jobs:
       - name: Generar vídeo
         run: python robot/noticiero.py
 
-      - name: Subir a Google Drive (API oficial)
+      - name: Enviar vídeo por correo
         env:
-          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
-          FOLDER_ID: ${{ env.FOLDER_ID }}
+          GMAIL_USER: loterialtr@gmail.com
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
         run: |
           python - << 'PY'
-          import os, base64, json
-          from google.oauth2 import service_account
-          from googleapiclient.discovery import build
-          from googleapiclient.http import MediaFileUpload
+          import smtplib, os
+          from email.mime.multipart import MIMEMultipart
+          from email.mime.base import MIMEBase
+          from email.mime.text import MIMEText
+          from email import encoders
 
-          # Limpia y arregla el base64
-          creds_b64 = os.environ["GDRIVE_CREDENTIALS"].strip().replace("\n", "").replace(" ", "")
-          # Añade padding si falta
-          missing_padding = len(creds_b64) % 4
-          if missing_padding:
-              creds_b64 += "=" * (4 - missing_padding)
+          titulo = open("salida/caption.txt", encoding="utf-8").read().strip()
 
-          creds_json = base64.b64decode(creds_b64).decode("utf-8")
-          creds_info = json.loads(creds_json)
+          msg = MIMEMultipart()
+          msg["From"] = os.environ["GMAIL_USER"]
+          msg["To"] = os.environ["GMAIL_USER"]
+          msg["Subject"] = f"Noticias con Eddy - {titulo[:60]}"
 
-          credentials = service_account.Credentials.from_service_account_info(
-              creds_info,
-              scopes=["https://www.googleapis.com/auth/drive"]
-          )
+          msg.attach(MIMEText(f"Nuevo vídeo generado:\n\n{titulo}", "plain"))
 
-          service = build("drive", "v3", credentials=credentials)
-          folder_id = os.environ["FOLDER_ID"]
+          with open("salida/ultima_noticia.mp4", "rb") as f:
+              part = MIMEBase("application", "octet-stream")
+              part.set_payload(f.read())
+              encoders.encode_base64(part)
+              part.add_header("Content-Disposition", "attachment; filename=noticia.mp4")
+              msg.attach(part)
 
-          def subir(ruta, nombre):
-              metadata = {"name": nombre, "parents": [folder_id]}
-              media = MediaFileUpload(ruta, resumable=True)
-              file = service.files().create(body=metadata, media_body=media, fields="id,name").execute()
-              print(f"✅ Subido a Drive: {file.get('name')} (ID: {file.get('id')})")
+          with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+              server.login(os.environ["GMAIL_USER"], os.environ["GMAIL_APP_PASSWORD"])
+              server.send_message(msg)
 
-          subir("salida/ultima_noticia.mp4", "ultima_noticia.mp4")
-          subir("salida/caption.txt", "caption.txt")
+          print("✅ Vídeo enviado a tu correo")
           PY
 
       - name: Subir artefactos (respaldo)
