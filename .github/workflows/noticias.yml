@@ -1,9 +1,8 @@
 name: Video de noticias
-
 on:
   workflow_dispatch:
   schedule:
-    # Horarios pico Hora RD / La Paz (UTC-4): 6:00, 7:42, 19:17, 21:00
+    # Horarios pico Hora RD / La Paz (UTC-4)
     - cron: '0 10 * * *'    # 06:00 AM RD
     - cron: '42 11 * * *'   # 07:42 AM RD
     - cron: '17 23 * * *'   # 07:17 PM RD
@@ -26,9 +25,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+      - name: Instalar dependencias del sistema
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
 
-      - run: pip install -r requisitos.txt
+      - name: Instalar dependencias Python
+        run: pip install -r requisitos.txt
 
       - name: Armar video
         run: python robot/noticiero.py
@@ -40,8 +41,9 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
-      - uses: actions/upload-artifact@v4
+      - name: Subir artifact
         if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: video-noticias
           path: |
@@ -50,15 +52,16 @@ jobs:
           retention-days: 7
 
       - name: Publicar en YouTube (apagado hasta que Eddy conecte la cuenta)
+        continue-on-error: true
         env:
           PUBLICAR: ${{ vars.PUBLICAR }}
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
         run: python robot/publicar_youtube.py
-        continue-on-error: true
 
       - name: Publicar en pagina de noticias de Facebook (NUNCA Primero Dios; apagado)
+        continue-on-error: true
         env:
           PUBLICAR: ${{ vars.PUBLICAR_FB_NOTICIAS }}
           TIPO: noticias
