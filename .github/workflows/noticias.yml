@@ -1,12 +1,12 @@
-name: Noticias con Eddy - NIVEL TELEMUNDO FIX
+name: Noticias con Eddy - TELEMUNDO + DRIVE
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 10 * * *'   # 06:00 RD
-    - cron: '42 11 * * *'  # 07:42 RD
-    - cron: '17 23 * * *'  # 19:17 RD
-    - cron: '0 1 * * *'    # 21:00 RD
+    - cron: '0 10 * * *'
+    - cron: '42 11 * * *'
+    - cron: '17 23 * * *'
+    - cron: '0 1 * * *'
 
 concurrency:
   group: noticias-eddy
@@ -19,10 +19,10 @@ jobs:
     env:
       SALIDA: salida
       TZ: America/Santo_Domingo
+      FOLDER_ID: 1irln1wOl_FBIOUFAL7d5JrRRU4mDQ8qv
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -32,17 +32,12 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
           mkdir -p robot salida/imagenes salida/audio tiktok-noticias
-
           cat > requirements.txt << 'REQ'
           feedparser
           edge-tts
           Pillow
           moviepy==1.0.3
-          requests
-          imageio-ffmpeg
-          REQ
-
-          pip install -r requirements.txt
+          [STRIPPED 83 bytes] install -r requirements.txt
 
           cat > robot/noticiero.py << 'PY'
           import os, feedparser, textwrap, asyncio, re, requests
@@ -51,112 +46,66 @@ jobs:
           import edge_tts
           from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips
           from zoneinfo import ZoneInfo
-
           if not hasattr(Image, 'ANTIALIAS'):
               Image.ANTIALIAS = Image.LANCZOS
-
           TZ = ZoneInfo("America/Santo_Domingo")
           AHORA = datetime.now(TZ)
           CARPETA = f"tiktok-noticias/{AHORA.strftime('%Y-%m-%d-%H%M')}"
           os.makedirs(CARPETA, exist_ok=True)
           os.makedirs("salida/imagenes", exist_ok=True)
           os.makedirs("salida/audio", exist_ok=True)
-
-          RSS = {
-              "Policia Nacional RD": "https://www.policianacional.gob.do/feed/",
-              "Listín Diario": "https://listindiario.com/rss/portada",
-              "Diario Libre": "https://www.diariolibre.com/rss/portada",
-          }
-
+          RSS = {"Policia Nacional RD": "https://www.policianacional.gob.do/feed/","Listín Diario": "https://listindiario.com/rss/portada","Diario Libre": "https://www.diariolibre.com/rss/portada",}
           def get_noticia():
               for nombre, url in RSS.items():
                   try:
                       feed = feedparser.parse(url)
                       if feed.entries:
                           e = feed.entries[0]
-                          return {
-                              "titulo": e.title,
-                              "fuente": nombre,
-                              "url": e.link,
-                              "fecha": AHORA.strftime("%Y-%m-%d"),
-                              "resumen": (e.get("summary") or e.get("description") or "")[:350]
-                          }
-                  except Exception:
-                      continue
-              return {
-                  "titulo": "Autoridades dominicanas refuerzan operativos de seguridad",
-                  "fuente": "Policia Nacional",
-                  "url": "https://policianacional.gob.do",
-                  "fecha": AHORA.strftime("%Y-%m-%d"),
-                  "resumen": "Operativos preventivos en todo el país."
-              }
-
+                          return {"titulo": e.title,"fuente": nombre,"url": e.link,"fecha": AHORA.strftime("%Y-%m-%d"),"resumen": (e.get("summary") or "")[:350]}
+                  except: continue
+              return {"titulo": "Autoridades refuerzan operativos de seguridad","fuente": "Policia Nacional","url": "https://policianacional.gob.do","fecha": AHORA.strftime("%Y-%m-%d"),"resumen": "Operativos preventivos"}
           def font(size, bold=True):
-              path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-              try:
-                  return ImageFont.truetype(path, size)
-              except:
-                  return ImageFont.load_default()
-
+              p = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+              try: return ImageFont.truetype(p, size)
+              except: return ImageFont.load_default()
           def get_broll_free(keyword="news"):
               try:
                   safe = re.sub(r'[^a-zA-Z0-9 ]', '', keyword)[:20].replace(" ", "%20")
-                  url = f"https://image.pollinations.ai/prompt/{safe}%20news%20studio%20dark%20blue%20cinematic?width=1080&height=1920&nologo=true&seed={AHORA.minute}"
+                  url = f"https://image.pollinations.ai/prompt/{safe}%20news%20studio%20dark%20blue?width=1080&height=1920&nologo=true&seed={AHORA.minute}"
                   r = requests.get(url, timeout=20)
                   if r.status_code == 200 and len(r.content) > 5000:
                       path = "salida/imagenes/broll_bg.jpg"
-                      with open(path, "wb") as f:
-                          f.write(r.content)
+                      open(path, "wb").write(r.content)
                       return path
-              except Exception:
-                  pass
+              except: pass
               return None
-
           def frame_telemundo(texto_principal, subtitulo_text, idx, total, fuente_txt, es_gancho=False, broll_path=None):
-              W, H = 1080, 1920
+              W,H = 1080,1920
               if broll_path and os.path.exists(broll_path):
                   try:
-                      bg = Image.open(broll_path).convert("RGB").resize((W, H))
+                      bg = Image.open(broll_path).convert("RGB").resize((W,H))
                       bg = bg.filter(ImageFilter.GaussianBlur(3))
                       img = bg
-                  except Exception:
-                      img = Image.new('RGB', (W, H), (7, 18, 65))
-              else:
-                  img = Image.new('RGB', (W, H), (7, 18, 65))
-
+                  except: img = Image.new('RGB', (W,H), (7, 18, 65))
+              else: img = Image.new('RGB', (W,H), (7, 18, 65))
               draw = ImageDraw.Draw(img, 'RGBA')
-
-              # Degradado suave
-              for y in range(H):
-                  alpha = int((y / H) * 40)
-                  draw.line([(0, y), (W, y)], fill=(7, 18 + int(y * 0.03), 65, alpha))
-
-              # Barra superior
+              for y in range(H): draw.line([(0, y), (W, y)], fill=(7, 18 + int(y * 0.03), 65, 0))
               draw.rectangle([0, 0, W, 145], fill=(195, 12, 45))
               draw.text((30, 42), "NOTICIAS CON EDDY", font=font(46), fill="white")
               draw.rectangle([W-210, 38, W-25, 98], fill="white")
               draw.text((W-185, 52), "EN VIVO", font=font(28), fill=(195, 12, 45))
-
               y0 = 260
               if es_gancho:
                   draw.rectangle([25, y0-15, W-25, y0+220], fill=(255, 255, 255))
                   draw.rectangle([25, y0-15, 38, y0+220], fill=(195, 12, 45))
-                  for i, line in enumerate(textwrap.wrap(texto_principal.upper(), width=18)[:3]):
-                      draw.text((60, y0 + 15 + i * 68), line, font=font(58), fill=(195, 12, 45))
+                  for i, line in enumerate(textwrap.wrap(texto_principal.upper(), width=18)[:3]): draw.text((60, y0 + 15 + i * 68), line, font=font(58), fill=(195, 12, 45))
               else:
                   draw.rectangle([25, y0-15, W-25, y0+420], fill=(0, 0, 0, 170))
-                  for i, line in enumerate(textwrap.wrap(texto_principal, width=30)[:5]):
-                      draw.text((52, y0 + 5 + i * 64), line, font=font(40), fill="white")
-
-              # Subtítulo quemado
+                  for i, line in enumerate(textwrap.wrap(texto_principal, width=30)[:5]): draw.text((52, y0 + 5 + i * 64), line, font=font(40), fill="white")
               if subtitulo_text:
                   sub_y = H - 340
                   draw.rectangle([20, sub_y - 10, W - 20, sub_y + 100], fill=(0, 0, 0, 210))
-                  for line in textwrap.wrap(subtitulo_text, width=42)[:2]:
-                      draw.text((40, sub_y), line, font=font(30, False), fill="white")
-                      sub_y += 40
-
-              # Barra inferior
+                  for line in textwrap.wrap(subtitulo_text, width=42)[:2]: draw.text((40, sub_y), line, font=font(30, False), fill="white"); sub_y += 40
               draw.rectangle([0, H-180, W, H], fill=(0, 0, 0, 230))
               draw.rectangle([0, H-180, W, H-174], fill=(195, 12, 45))
               draw.rectangle([25, H-155, 410, H-115], fill="white")
@@ -164,83 +113,44 @@ jobs:
               draw.text((430, H-148), fuente_txt[:48], font=font(20, False), fill=(200, 200, 200))
               draw.text((30, H-88), "Fuente: " + fuente_txt, font=font(20, False), fill=(170, 170, 170))
               draw.text((W-340, H-48), "@eddy_infante", font=font(22, False), fill="white")
-
               path = f"salida/imagenes/frame_{idx:02d}.jpg"
               img.save(path, quality=95)
               return path
-
           async def crear_audio_broadcast(texto, path):
-              await edge_tts.Communicate(
-                  texto, "es-MX-JorgeNeural", rate="-16%", pitch="-2Hz"
-              ).save(path)
+              await edge_tts.Communicate(texto, "es-MX-JorgeNeural", rate="-16%", pitch="-2Hz").save(path)
               tmp = path.replace(".mp3", "_norm.mp3")
               os.system(f'ffmpeg -y -i "{path}" -filter:a loudnorm=I=-14:TP=-1.2:LRA=11 "{tmp}" -loglevel error')
-              if os.path.exists(tmp):
-                  os.replace(tmp, path)
-
+              if os.path.exists(tmp): os.replace(tmp, path)
           def main():
               n = get_noticia()
               cifras = re.findall(r'\d+%|\d+\s*millones|\d+\s*detenidos|\d+\s*muertos', n['titulo'], re.I)
               gancho = cifras[0] if cifras else " ".join(n['titulo'].split()[:5])
-
               guion = f"""{gancho}. Atención República Dominicana. Te habla Eddy Infante desde Santo Domingo. {n['titulo']}. Información confirmada hoy {n['fecha']} por {n['fuente']}. Según el comunicado oficial, {n['resumen']}. Las autoridades confirman que se activaron los protocolos correspondientes. Datos oficiales de {n['fuente']} del {n['fecha']}. Qué significa para nuestra gente: mantenerse informado solo por fuentes oficiales. Qué sigue: nuevo boletín en las próximas horas. Con Dios por delante, fe y responsabilidad. ¿Y usted qué opina? Escriba su país. Con Dios por delante, te informo Eddy Infante. Sígueme en TikTok y YouTube."""
-
-              if len(guion.split()) < 180:
-                  guion += " Recordamos que la Policía Nacional y el COE piden mantenerse informado por canales oficiales."
-
+              if len(guion.split()) < 180: guion += " Recordamos que la Policía Nacional y el COE piden mantenerse informado por canales oficiales."
               frases = [s.strip() for s in re.split(r'[.!?]', guion) if len(s.strip()) > 12][:10]
               fuente_txt = f"{n['fuente']}, {n['fecha']}"
               broll = get_broll_free(n['titulo'][:18])
-
-              frames = [
-                  frame_telemundo(
-                      f[:140], f[:95], i, len(frases), fuente_txt,
-                      es_gancho=(i == 0),
-                      broll_path=broll if i % 3 == 0 else None
-                  )
-                  for i, f in enumerate(frases)
-              ]
-
-              # Audio
+              frames = [frame_telemundo(f[:140], f[:95], i, len(frases), fuente_txt, es_gancho=(i == 0), broll_path=broll if i % 3 == 0 else None) for i, f in enumerate(frases)]
               audio_path = "salida/audio/voz.mp3"
               asyncio.run(crear_audio_broadcast(guion, audio_path))
-
-              # Montaje
               audio = AudioFileClip(audio_path)
-              duracion_total = audio.duration
-              dur_por_frame = duracion_total / len(frames)
-
-              clips = []
-              for i, frame in enumerate(frames):
-                  clip = ImageClip(frame).set_duration(dur_por_frame).set_fps(24)
-                  clips.append(clip)
-
-              video = concatenate_videoclips(clips, method="compose")
-              video = video.set_audio(audio)
-
+              dur_por_frame = audio.duration / len(frames)
+              clips = [ImageClip(frame).set_duration(dur_por_frame).set_fps(24) for frame in frames]
+              video = concatenate_videoclips(clips, method="compose").set_audio(audio)
               salida_final = f"{CARPETA}/noticia_{AHORA.strftime('%H%M')}.mp4"
-              video.write_videofile(
-                  salida_final,
-                  fps=24,
-                  codec="libx264",
-                  audio_codec="aac",
-                  preset="medium",
-                  threads=4,
-                  logger=None
-              )
-
+              video.write_videofile(salida_final, fps=24, codec="libx264", audio_codec="aac", preset="medium", threads=4, logger=None)
               print(f"VIDEO LISTO: {salida_final}")
-              # Copiar también a salida/
-              os.system(f'cp "{salida_final}" salida/ultima_noticia.mp4')
-
-          if __name__ == "__main__":
-              main()
+              import shutil
+              shutil.copy(salida_final, "salida/ultima_noticia.mp4")
+              open(f"{CARPETA}/caption.txt","w",encoding="utf-8").write(n['titulo'])
+              open("salida/caption.txt","w",encoding="utf-8").write(n['titulo'])
+          if __name__ == "__main__": main()
           PY
 
       - name: Generar vídeo
         run: python robot/noticiero.py
 
-      - name: Subir artefactos
+      - name: Subir artefactos (respaldo)
         uses: actions/upload-artifact@v4
         with:
           name: noticia-eddy-${{ github.run_number }}
@@ -248,3 +158,22 @@ jobs:
             salida/
             tiktok-noticias/
           retention-days: 7
+
+      - name: SUBIR A GOOGLE DRIVE - TU CARPETA
+        if: always()
+        uses: adityak74/google-drive-upload-git-action@main
+        with:
+          credentials: ${{ secrets.GDRIVE_CREDENTIALS }}
+          folderId: ${{ env.FOLDER_ID }}
+          filename: "salida/ultima_noticia.mp4"
+          overwrite: "true"
+          mirrorDirectoryStructure: "false"
+
+      - name: Subir también portada y caption a Drive
+        if: always()
+        uses: adityak74/google-drive-upload-git-action@main
+        with:
+          credentials: ${{ secrets.GDRIVE_CREDENTIALS }}
+          folderId: ${{ env.FOLDER_ID }}
+          filename: "tiktok-noticias/*/*.*"
+          overwrite: "true"
