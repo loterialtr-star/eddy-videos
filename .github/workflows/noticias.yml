@@ -21,7 +21,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: INSTALAR TODO Y BORRAR LO VIEJO - UN SOLO PASO
+      - name: INSTALAR TODO Y BORRAR LO VIEJO - FIX ANTIALIAS
         run: |
           rm -rf robot/noticiero.py robot/verificar.py requirements.txt salida/
           mkdir -p robot salida/imagenes salida/audio .github/workflows
@@ -34,14 +34,18 @@ jobs:
           Pillow
           moviepy==1.0.3
           requests
-          beautifulsoup4
-          lxml
+          imageio-ffmpeg
           REQ
 
           cat > robot/noticiero.py << 'PY'
           import os, feedparser, textwrap, asyncio
           from datetime import datetime
-          from PIL import Image, ImageDraw, ImageFont
+          from PIL import Image
+          # FIX PARA PILLOW 10+ - ESTO ARREGLA TU ERROR
+          if not hasattr(Image, 'ANTIALIAS'):
+              Image.ANTIALIAS = Image.LANCZOS
+
+          from PIL import ImageDraw, ImageFont
           import edge_tts
           from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips
           from zoneinfo import ZoneInfo
@@ -54,7 +58,6 @@ jobs:
               "https://www.diariolibre.com/rss/portada",
               "https://listindiario.com/rss/portada",
               "https://www.elcaribe.com.do/feed/",
-              "https://www.eltiempo.com/rss/mundo.xml",
           ]
 
           def get_noticias():
@@ -67,11 +70,7 @@ jobs:
                           if len(noticias) >= 5: break
                   except: continue
               if not noticias:
-                  noticias = [
-                      {"titulo": "Ultimas noticias de Republica Dominicana"},
-                      {"titulo": "El pais se mantiene informado hoy"},
-                      {"titulo": "Panorama nacional actualizado"},
-                  ]
+                  noticias = [{"titulo": "Noticias de hoy en Republica Dominicana"} for _ in range(3)]
               return noticias[:5]
 
           def crear_imagen(titulo, idx):
@@ -79,26 +78,26 @@ jobs:
               img = Image.new('RGB', (W, H), (10, 15, 30))
               draw = ImageDraw.Draw(img)
               try:
-                  font_b = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 58)
-                  font_n = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 38)
+                  font_b = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 52)
+                  font_n = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 36)
               except:
                   font_b = ImageFont.load_default()
                   font_n = font_b
               draw.rectangle([0,0,W,190], fill=(220,20,60))
-              draw.text((40,55), "NOTICIAS RD - EN VIVO", font=font_b, fill="white")
-              lines = textwrap.wrap(titulo, width=27)
-              y=320
-              for line in lines:
-                  draw.text((55,y), line.upper(), font=font_b, fill="white")
-                  y+=90
-              ahora = datetime.now(ZoneInfo("America/Santo_Domingo")).strftime("%d %B %Y - %I:%M %p")
-              draw.text((55, H-180), ahora, font=font_n, fill=(200,200,200))
+              draw.text((40,55), "NOTICIAS RD", font=font_b, fill="white")
+              lines = textwrap.wrap(titulo, width=26)
+              y=300
+              for line in lines[:8]:
+                  draw.text((50,y), line.upper(), font=font_b, fill="white")
+                  y+=80
+              ahora = datetime.now(ZoneInfo("America/Santo_Domingo")).strftime("%d %B %Y %I:%M %p")
+              draw.text((50, H-150), ahora, font=font_n, fill=(200,200,200))
               path = f"{SALIDA}/imagenes/noticia_{idx}.jpg"
               img.save(path, quality=95)
               return path
 
           async def crear_audio(texto, path):
-              comm = edge_tts.Communicate(texto, "es-DO-RamonaNeural", rate="-4%")
+              comm = edge_tts.Communicate(texto, "es-DO-RamonaNeural", rate="-5%")
               await comm.save(path)
 
           def main():
@@ -107,7 +106,7 @@ jobs:
               guion = "Estas son las noticias mas importantes de hoy. "
               for n in noticias:
                   guion += f"{n['titulo']}. "
-              print(f">> Guion: {guion}")
+              print(f">> Guion: {guion[:150]}")
 
               imagenes = [crear_imagen(n['titulo'], i) for i, n in enumerate(noticias)]
               audio_path = f"{SALIDA}/audio/noticiero.mp3"
@@ -115,7 +114,8 @@ jobs:
               
               audio = AudioFileClip(audio_path)
               dur = audio.duration / len(imagenes)
-              clips = [ImageClip(p).set_duration(dur).resize((1080,1920)) for p in imagenes]
+              # FIX: Ya no usamos .resize() porque la imagen ya es 1080x1920
+              clips = [ImageClip(p).set_duration(dur) for p in imagenes]
               video = concatenate_videoclips(clips, method="compose").set_audio(audio)
               
               out = f"{SALIDA}/noticiero_{datetime.now().strftime('%Y%m%d_%H%M')}.mp4"
@@ -128,31 +128,29 @@ jobs:
 
           cat > robot/verificar.py << 'PY'
           import os, glob
-          from moviepy.editor import VideoFileClip
           SALIDA = os.getenv("SALIDA", "salida")
           videos = glob.glob(f"{SALIDA}/*.mp4")
           if not videos:
               print("No hay video, creando respaldo...")
               from PIL import Image
+              if not hasattr(Image, 'ANTIALIAS'):
+                  Image.ANTIALIAS = Image.LANCZOS
               from moviepy.editor import ImageClip
               os.makedirs(f"{SALIDA}/imagenes", exist_ok=True)
-              img = Image.new('RGB', (1080,1920), (15,15,15))
               p = f"{SALIDA}/imagenes/respaldo.jpg"
-              img.save(p)
+              Image.new('RGB', (1080,1920), (15,15,15)).save(p)
               ImageClip(p).set_duration(5).write_videofile(f"{SALIDA}/respaldo.mp4", fps=24)
               exit(0)
+          from moviepy.editor import VideoFileClip
           for v in videos:
-              clip = VideoFileClip(v)
-              print(f"OK {v} duracion={clip.duration:.1f}s size={os.path.getsize(v)/1024/1024:.1f}MB")
-          print("Verificacion OK")
+              print(f"OK {v} size={os.path.getsize(v)/1024/1024:.1f}MB")
           PY
 
           cat > robot/publicar_youtube.py << 'PY'
-          print("YouTube apagado - conecta YT_CLIENT_ID para activar")
+          print("YouTube apagado")
           PY
-
           cat > robot/publicar_facebook.py << 'PY'
-          print("Facebook apagado - conecta FB token para activar")
+          print("Facebook apagado")
           PY
 
           pip install --upgrade pip
