@@ -8,7 +8,7 @@ concurrency: noticias
 jobs:
   video:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     env: { SALIDA: salida, TZ: America/Santo_Domingo }
     steps:
       - uses: actions/checkout@v4
@@ -17,12 +17,16 @@ jobs:
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
       - run: pip install -r requirements.txt
       - name: Armar video
-        run: python robot/armar.py
+        run: python robot/noticiero.py
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       - name: Controles automaticos (si falla, no se publica)
         run: python robot/verificar.py
       - uses: actions/upload-artifact@v4
         if: always()
-        with: { name: video-noticias, path: "salida/*.*", retention-days: 7 }
+        with: { name: video-noticias, path: |
+            salida/*.*
+            salida/imagenes/, retention-days: 7 }
       - name: Publicar en YouTube (apagado hasta que Eddy conecte la cuenta)
         env:
           PUBLICAR: ${{ vars.PUBLICAR }}

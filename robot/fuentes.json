@@ -1,8 +1,16 @@
 {
   "rd": [
-    {"nombre": "Presidencia de la República Dominicana", "corto": "la Presidencia de la República", "url": "https://presidencia.gob.do/rss.xml"}
+    {"nombre": "Presidencia de la República", "url": "https://presidencia.gob.do/rss.xml"},
+    {"nombre": "Diario Libre", "url": "https://www.diariolibre.com/rss/portada.xml"},
+    {"nombre": "El Día", "url": "https://eldia.com.do/feed/"},
+    {"nombre": "Hoy", "url": "https://hoy.com.do/feed/"},
+    {"nombre": "N Digital", "url": "https://n.com.do/feed/"},
+    {"nombre": "El Nuevo Diario", "url": "https://elnuevodiario.com.do/feed/"}
   ],
   "mundo": [
-    {"nombre": "Noticias ONU", "corto": "Noticias ONU", "url": "https://news.un.org/feed/subscribe/es/news/all/rss.xml"}
+    {"nombre": "BBC Mundo", "url": "https://feeds.bbci.co.uk/mundo/rss.xml"},
+    {"nombre": "DW Español", "url": "https://rss.dw.com/rdf/rss-sp-all"},
+    {"nombre": "France 24", "url": "https://www.france24.com/es/rss"},
+    {"nombre": "Noticias ONU", "url": "https://news.un.org/feed/subscribe/es/news/all/rss.xml"}
   ]
 }
