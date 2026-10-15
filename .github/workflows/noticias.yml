@@ -69,3 +69,10 @@ jobs:
           FB_PAGE_TOKEN: ${{ secrets.FB_NOTICIAS_TOKEN }}
           FB_PRIMERO_DIOS_ID: ${{ secrets.FB_PRIMERO_DIOS_ID }}
         run: python robot/publicar_facebook.py
+- name: Subir a Google Drive
+        uses: adityak74/google-drive-upload-git-action@main
+        with:
+          credentials: ${{ secrets.GDRIVE_CREDENTIALS }}
+          folderId: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
+          filename: "out/*.mp4"
+          overwrite: "true"
