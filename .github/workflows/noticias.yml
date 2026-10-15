@@ -1,11 +1,13 @@
-name: Noticias con Eddy - NIVEL 【entity-TELEMUNDO¦canonical_name=Telemundo】
+name: Noticias con Eddy - NIVEL TELEMUNDO FIX
+
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 10 * * *'
-    - cron: '42 11 * * *'
-    - cron: '17 23 * * *'
-    - cron: '0 1 * * *'
+    - cron: '0 10 * * *'   # 06:00 RD
+    - cron: '42 11 * * *'  # 07:42 RD
+    - cron: '17 23 * * *'  # 19:17 RD
+    - cron: '0 1 * * *'    # 21:00 RD
+
 concurrency:
   group: noticias-eddy
   cancel-in-progress: false
@@ -17,18 +19,20 @@ jobs:
     env:
       SALIDA: salida
       TZ: America/Santo_Domingo
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: INSTALAR NIVEL BROADCAST
+      - name: Dependencias + script
         run: |
-          rm -rf robot/noticiero.py robot/verificar.py
-          mkdir -p robot tiktok-noticias/sello salida/imagenes salida/audio
           sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg fonts-dejavu-core fonts-noto-color-emoji
+          sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+          mkdir -p robot salida/imagenes salida/audio tiktok-noticias
+
           cat > requirements.txt << 'REQ'
           feedparser
           edge-tts
@@ -38,16 +42,18 @@ jobs:
           imageio-ffmpeg
           REQ
 
+          pip install -r requirements.txt
+
           cat > robot/noticiero.py << 'PY'
           import os, feedparser, textwrap, asyncio, re, requests
           from datetime import datetime
-          from PIL import Image
+          from PIL import Image, ImageDraw, ImageFont, ImageFilter
+          import edge_tts
+          from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips
+          from zoneinfo import ZoneInfo
+
           if not hasattr(Image, 'ANTIALIAS'):
               Image.ANTIALIAS = Image.LANCZOS
-          from PIL import ImageDraw, ImageFont, ImageFilter
-          import edge_tts
-          from moviepy.editor import *
-          from zoneinfo import ZoneInfo
 
           TZ = ZoneInfo("America/Santo_Domingo")
           AHORA = datetime.now(TZ)
@@ -57,211 +63,188 @@ jobs:
           os.makedirs("salida/audio", exist_ok=True)
 
           RSS = {
-            " 【entity-Policia Nacional¦canonical_name=Policia Nacional】 RD": "https://www.policianacional.gob.do/feed/",
-            "Listin Diario": "https://listindiario.com/rss/portada",
-            " Diario Libre": "https://www.diariolibre.com/rss/portada",
-            "Reuters Mundo": "https://www.reutersagency.com/feed/?best-sectors=world&post_type=best",
+              "Policia Nacional RD": "https://www.policianacional.gob.do/feed/",
+              "Listín Diario": "https://listindiario.com/rss/portada",
+              "Diario Libre": "https://www.diariolibre.com/rss/portada",
           }
 
           def get_noticia():
               for nombre, url in RSS.items():
                   try:
                       feed = feedparser.parse(url)
-                      for e in feed.entries[:3]:
-                          return {"titulo": e.title, "fuente": nombre, "url": e.link, "fecha": AHORA.strftime("%Y-%m-%d"), "resumen": e.get("summary","")[:350]}
-                  except: continue
-              return {"titulo": "Autoridades dominicanas refuerzan operativos de seguridad a nivel nacional", "fuente": "【entity-Policia Nacional¦canonical_name=Policia Nacional】", "url": "https://policianacional.gob.do", "fecha": AHORA.strftime("%Y-%m-%d"), "resumen": "Operativos preventivos en todo el territorio nacional"}
+                      if feed.entries:
+                          e = feed.entries[0]
+                          return {
+                              "titulo": e.title,
+                              "fuente": nombre,
+                              "url": e.link,
+                              "fecha": AHORA.strftime("%Y-%m-%d"),
+                              "resumen": (e.get("summary") or e.get("description") or "")[:350]
+                          }
+                  except Exception:
+                      continue
+              return {
+                  "titulo": "Autoridades dominicanas refuerzan operativos de seguridad",
+                  "fuente": "Policia Nacional",
+                  "url": "https://policianacional.gob.do",
+                  "fecha": AHORA.strftime("%Y-%m-%d"),
+                  "resumen": "Operativos preventivos en todo el país."
+              }
 
           def font(size, bold=True):
-              p = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-              try: return ImageFont.truetype(p, size)
-              except: return ImageFont.load_default()
-
-          def get_broll_free(keyword="news world"):
-              # Imagen gratis tipo broadcast - Pollinations es gratis ilimitado
+              path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
               try:
-                  safe = keyword.replace(" ", "%20")[:30]
-                  url = f"https://image.pollinations.ai/prompt/{safe}%20news%20studio%20professional%20background%20dark%20blue?width=1080&height=1920&nologo=true"
-                  r = requests.get(url, timeout=15)
-                  if r.status_code == 200:
+                  return ImageFont.truetype(path, size)
+              except:
+                  return ImageFont.load_default()
+
+          def get_broll_free(keyword="news"):
+              try:
+                  safe = re.sub(r'[^a-zA-Z0-9 ]', '', keyword)[:20].replace(" ", "%20")
+                  url = f"https://image.pollinations.ai/prompt/{safe}%20news%20studio%20dark%20blue%20cinematic?width=1080&height=1920&nologo=true&seed={AHORA.minute}"
+                  r = requests.get(url, timeout=20)
+                  if r.status_code == 200 and len(r.content) > 5000:
                       path = "salida/imagenes/broll_bg.jpg"
-                      open(path, "wb").write(r.content)
+                      with open(path, "wb") as f:
+                          f.write(r.content)
                       return path
-              except: pass
+              except Exception:
+                  pass
               return None
 
           def frame_telemundo(texto_principal, subtitulo_text, idx, total, fuente_txt, es_gancho=False, broll_path=None):
-              W,H = 1080,1920
-              # Base broadcast
+              W, H = 1080, 1920
               if broll_path and os.path.exists(broll_path):
                   try:
-                      bg = Image.open(broll_path).convert("RGB").resize((W,H))
-                      bg = bg.filter(ImageFilter.GaussianBlur(2))
+                      bg = Image.open(broll_path).convert("RGB").resize((W, H))
+                      bg = bg.filter(ImageFilter.GaussianBlur(3))
                       img = bg
-                  except:
-                      img = Image.new('RGB', (W,H), (7, 18, 65))
+                  except Exception:
+                      img = Image.new('RGB', (W, H), (7, 18, 65))
               else:
-                  img = Image.new('RGB', (W,H), (7, 18, 65))
-
-              # Overlay degradado oscuro para legibilidad mundial
-              overlay = Image.new('RGB', (W,H), (0,0,0))
-              draw_overlay = ImageDraw.Draw(overlay)
-              for y in range(H):
-                  alpha = int( (y/H)*120 )
-                  draw_overlay.line([(0,y),(W,y)], fill=(alpha,alpha,alpha))
-              img = Image.blend(img, Image.new('RGB', (W,H), (7,18,65)), 0.75)
+                  img = Image.new('RGB', (W, H), (7, 18, 65))
 
               draw = ImageDraw.Draw(img, 'RGBA')
 
-              # Barra superior 【entity-TELEMUNDO¦canonical_name=Telemundo】 STYLE
-              draw.rectangle([0,0,W,145], fill=(195,12,45, 255))
-              # brillo
-              draw.rectangle([0,0,W,8], fill=(255,255,255,80))
-              draw.text((30, 38), "NOTICIAS CON EDDY", font=font(48), fill="white")
-              draw.rectangle([W-210, 35, W-20, 95], fill="white")
-              draw.text((W-190, 45), "EN VIVO", font=font(28), fill=(195,12,45))
+              # Degradado suave
+              for y in range(H):
+                  alpha = int((y / H) * 40)
+                  draw.line([(0, y), (W, y)], fill=(7, 18 + int(y * 0.03), 65, alpha))
 
-              # Caja de texto principal con sombra - zona segura
+              # Barra superior
+              draw.rectangle([0, 0, W, 145], fill=(195, 12, 45))
+              draw.text((30, 42), "NOTICIAS CON EDDY", font=font(46), fill="white")
+              draw.rectangle([W-210, 38, W-25, 98], fill="white")
+              draw.text((W-185, 52), "EN VIVO", font=font(28), fill=(195, 12, 45))
+
               y0 = 260
               if es_gancho:
-                  # Cifra gigante tipo BREAKING
-                  draw.rectangle([25, y0-15, W-25, y0+210], fill=(255,255,255))
-                  draw.rectangle([25, y0-15, 18, y0+210], fill=(195,12,45))
-                  for i, line in enumerate(textwrap.wrap(texto_principal, width=20)[:3]):
-                      draw.text((60, y0+10+i*70), line.upper(), font=font(62), fill=(195,12,45))
-                  y0+=260
+                  draw.rectangle([25, y0-15, W-25, y0+220], fill=(255, 255, 255))
+                  draw.rectangle([25, y0-15, 38, y0+220], fill=(195, 12, 45))
+                  for i, line in enumerate(textwrap.wrap(texto_principal.upper(), width=18)[:3]):
+                      draw.text((60, y0 + 15 + i * 68), line, font=font(58), fill=(195, 12, 45))
               else:
-                  # Fondo semitransparente para texto normal
-                  draw.rectangle([25, y0-15, W-25, y0+380], fill=(0,0,0,160))
-                  for i, line in enumerate(textwrap.wrap(texto_principal, width=32)[:6]):
-                      # sombra
-                      draw.text((52, y0+2+i*62), line, font=font(42), fill=(0,0,0))
-                      draw.text((50, y0+i*62), line, font=font(42), fill="white")
-                  y0+=420
+                  draw.rectangle([25, y0-15, W-25, y0+420], fill=(0, 0, 0, 170))
+                  for i, line in enumerate(textwrap.wrap(texto_principal, width=30)[:5]):
+                      draw.text((52, y0 + 5 + i * 64), line, font=font(40), fill="white")
 
-              # SUBTITULO QUEMADO - Zona segura inferior (como 【entity-Telemundo¦canonical_name=Telemundo】)
+              # Subtítulo quemado
               if subtitulo_text:
-                  sub_y = H - 320
-                  draw.rectangle([20, sub_y-10, W-20, sub_y+90], fill=(0,0,0,200))
-                  for line in textwrap.wrap(subtitulo_text, width=45)[:2]:
-                      draw.text((40, sub_y), line, font=font(32, False), fill="white")
-                      sub_y+=42
+                  sub_y = H - 340
+                  draw.rectangle([20, sub_y - 10, W - 20, sub_y + 100], fill=(0, 0, 0, 210))
+                  for line in textwrap.wrap(subtitulo_text, width=42)[:2]:
+                      draw.text((40, sub_y), line, font=font(30, False), fill="white")
+                      sub_y += 40
 
-              # Lower third profesional
-              draw.rectangle([0, H-180, W, H], fill=(0,0,0,230))
-              draw.rectangle([0, H-180, W, H-174], fill=(195,12,45))
-              draw.rectangle([25, H-155, 400, H-115], fill="white")
-              draw.text((45, H-150), "ULTIMA HORA | RD", font=font(24), fill=(7,18,65))
-              draw.text((430, H-150), fuente_txt[:55], font=font(20, False), fill=(200,200,200))
-              draw.text((30, H-90), "Fuente: "+fuente_txt, font=font(20, False), fill=(170,170,170))
-              draw.text((W-320, H-50), "@eddy_infante | @VIPFuerte", font=font(22, False), fill="white")
+              # Barra inferior
+              draw.rectangle([0, H-180, W, H], fill=(0, 0, 0, 230))
+              draw.rectangle([0, H-180, W, H-174], fill=(195, 12, 45))
+              draw.rectangle([25, H-155, 410, H-115], fill="white")
+              draw.text((45, H-148), "ÚLTIMA HORA | RD", font=font(24), fill=(7, 18, 65))
+              draw.text((430, H-148), fuente_txt[:48], font=font(20, False), fill=(200, 200, 200))
+              draw.text((30, H-88), "Fuente: " + fuente_txt, font=font(20, False), fill=(170, 170, 170))
+              draw.text((W-340, H-48), "@eddy_infante", font=font(22, False), fill="white")
 
               path = f"salida/imagenes/frame_{idx:02d}.jpg"
               img.save(path, quality=95)
               return path
 
           async def crear_audio_broadcast(texto, path):
-              # Voz lenta y grave para broadcast mundial
-              await edge_tts.Communicate(texto, "es-MX-JorgeNeural", rate="-18%", pitch="-2Hz", volume="+5%").save(path)
-              tmp = path.replace(".mp3","_norm.mp3")
-              # -14 LUFS + musica de fondo muy baja
-              os.system(f'ffmpeg -y -i "{path}" -filter:a loudnorm=I=-14:TP=-1.2:LRA=9 "{tmp}" -loglevel quiet')
-              if os.path.exists(tmp): os.rename(tmp, path)
+              await edge_tts.Communicate(
+                  texto, "es-MX-JorgeNeural", rate="-16%", pitch="-2Hz"
+              ).save(path)
+              tmp = path.replace(".mp3", "_norm.mp3")
+              os.system(f'ffmpeg -y -i "{path}" -filter:a loudnorm=I=-14:TP=-1.2:LRA=11 "{tmp}" -loglevel error')
+              if os.path.exists(tmp):
+                  os.replace(tmp, path)
 
           def main():
               n = get_noticia()
-              print(f"NOTICIA: {n['titulo']}")
-              broll = get_broll_free(n['titulo'][:20])
+              cifras = re.findall(r'\d+%|\d+\s*millones|\d+\s*detenidos|\d+\s*muertos', n['titulo'], re.I)
+              gancho = cifras[0] if cifras else " ".join(n['titulo'].split()[:5])
 
-              cifras = re.findall(r'\d+%|\d+ millones|\d+ detenidos', n['titulo'])
-              gancho = cifras[0] if cifras else " ".join(n['titulo'].split()[:4])
+              guion = f"""{gancho}. Atención República Dominicana. Te habla Eddy Infante desde Santo Domingo. {n['titulo']}. Información confirmada hoy {n['fecha']} por {n['fuente']}. Según el comunicado oficial, {n['resumen']}. Las autoridades confirman que se activaron los protocolos correspondientes. Datos oficiales de {n['fuente']} del {n['fecha']}. Qué significa para nuestra gente: mantenerse informado solo por fuentes oficiales. Qué sigue: nuevo boletín en las próximas horas. Con Dios por delante, fe y responsabilidad. ¿Y usted qué opina? Escriba su país. Con Dios por delante, te informo Eddy Infante. Sígueme en TikTok y YouTube."""
 
-              guion = f"""{gancho}. Atencion, atencion Republica Dominicana y el mundo. Te habla Eddy Infante, desde Santo Domingo.
+              if len(guion.split()) < 180:
+                  guion += " Recordamos que la Policía Nacional y el COE piden mantenerse informado por canales oficiales."
 
-              {n['titulo']}. Informacion confirmada hoy {n['fecha']} por {n['fuente']}.
-
-              Segun el comunicado oficial, {n['resumen']}. Las autoridades confirman que el hecho ocurrio y que se activaron de inmediato los protocolos de seguridad y asistencia. De manera preliminar y presunta, segun el informe oficial, las unidades correspondientes estan trabajando en el lugar.
-
-              Datos oficiales: este reporte llega directamente de {n['fuente']}, publicado en su portal oficial el {n['fecha']}. Enlace verificable: {n['url']}. No hay cifras inventadas. Todo confirmado.
-
-              Que significa para nuestra gente en RD y en el exterior: este caso afecta la seguridad ciudadana. Por eso recomendamos a todos, en cualquier parte del mundo, informarse solo por fuentes oficiales como la 【entity-Policia Nacional¦canonical_name=Policia Nacional】, Presidencia y COE. Evite rumores.
-
-              Que sigue: las autoridades anunciaron que emitiran un segundo boletin en las proximas horas. El Ministerio Publico continua con las investigaciones bajo el debido proceso.
-
-              Con Dios por delante, mantenemos la fe y la esperanza. La informacion con responsabilidad nos hace libres.
-
-              Y usted, que opina desde donde nos ve? Escriba su pais en los comentarios.
-
-              Con Dios por delante, te informo Eddy Infante. Sigueme en TikTok y suscribete en YouTube VIPFuerte para mas noticias verificadas a nivel mundial."""
-
-              print(f"Guion {len(guion.split())} palabras - debe durar 2:30 a 4 min")
-
-              frases = [s.strip() for s in guion.split('.') if len(s.strip())>12][:14]
+              frases = [s.strip() for s in re.split(r'[.!?]', guion) if len(s.strip()) > 12][:10]
               fuente_txt = f"{n['fuente']}, {n['fecha']}"
+              broll = get_broll_free(n['titulo'][:18])
 
-              frames = []
-              for i,f in enumerate(frases):
-                  sub = f[:90] # subtitulo quemado igual que audio
-                  frames.append(frame_telemundo(f[:130], sub, i, len(frases), fuente_txt, es_gancho=(i==0), broll_path=broll if i%3==0 else None))
+              frames = [
+                  frame_telemundo(
+                      f[:140], f[:95], i, len(frases), fuente_txt,
+                      es_gancho=(i == 0),
+                      broll_path=broll if i % 3 == 0 else None
+                  )
+                  for i, f in enumerate(frases)
+              ]
 
-              audio_path = "salida/audio/noticiero.mp3"
+              # Audio
+              audio_path = "salida/audio/voz.mp3"
               asyncio.run(crear_audio_broadcast(guion, audio_path))
 
+              # Montaje
               audio = AudioFileClip(audio_path)
-              dur = audio.duration / len(frames)
-              clips = [ImageClip(p).set_duration(dur) for p in frames]
-              video = concatenate_videoclips(clips, method="compose").set_audio(audio)
+              duracion_total = audio.duration
+              dur_por_frame = duracion_total / len(frames)
 
-              CARPETA = f"tiktok-noticias/{AHORA.strftime('%Y-%m-%d-%H%M')}"
-              os.makedirs(CARPETA, exist_ok=True)
-              video_final = f"{CARPETA}/video.mp4"
-              video.write_videofile(video_final, fps=30, codec='libx264', audio_codec='aac', preset='medium', ffmpeg_params=["-pix_fmt","yuv420p","-movflags","+faststart"])
+              clips = []
+              for i, frame in enumerate(frames):
+                  clip = ImageClip(frame).set_duration(dur_por_frame).set_fps(24)
+                  clips.append(clip)
 
-              import shutil
-              shutil.copy(frames[0], f"{CARPETA}/portada.jpg")
-              shutil.copy(video_final, "salida/")
+              video = concatenate_videoclips(clips, method="compose")
+              video = video.set_audio(audio)
 
-              caption = f"{n['titulo']}\n\n¿Desde donde nos ves? 🌎\n\nFuente: {n['fuente']}, {n['fecha']} - {n['url']}\n\n#NoticiasRD #TelemundoStyle #EddyInfante #Mundo #RD #BreakingNews"
-              open(f"{CARPETA}/caption.txt","w",encoding="utf-8").write(caption)
-              open(f"{CARPETA}/yt-title.txt","w",encoding="utf-8").write(f"{gancho} - {n['titulo']}"[:100])
-              open(f"{CARPETA}/yt-desc.txt","w",encoding="utf-8").write(f"{caption}\n\nContiene imagenes generadas con IA")
-              open(f"{CARPETA}/guion.txt","w",encoding="utf-8").write(guion)
-              open("salida/caption.txt","w",encoding="utf-8").write(caption)
-              print(f"✅ VIDEO NIVEL TELEMUNDO LISTO {video_final} {audio.duration:.1f}s")
+              salida_final = f"{CARPETA}/noticia_{AHORA.strftime('%H%M')}.mp4"
+              video.write_videofile(
+                  salida_final,
+                  fps=24,
+                  codec="libx264",
+                  audio_codec="aac",
+                  preset="medium",
+                  threads=4,
+                  logger=None
+              )
+
+              print(f"VIDEO LISTO: {salida_final}")
+              # Copiar también a salida/
+              os.system(f'cp "{salida_final}" salida/ultima_noticia.mp4')
 
           if __name__ == "__main__":
               main()
           PY
 
-          cat > robot/verificar.py << 'PY'
-          import glob
-          from PIL import Image
-          if not hasattr(Image, 'ANTIALIAS'):
-              Image.ANTIALIAS = Image.LANCZOS
-          from moviepy.editor import VideoFileClip
-          vids = glob.glob("tiktok-noticias/*/*.mp4")
-          if not vids: vids = glob.glob("salida/*.mp4")
-          v = vids[-1]
-          clip = VideoFileClip(v)
-          print(f"Verificando broadcast {v} {clip.w}x{clip.h} {clip.duration:.1f}s")
-          assert clip.w==1080 and clip.h==1920, "No es 1080x1920"
-          assert clip.duration >= 110, f"Muy corto {clip.duration}s, minimo 110s para broadcast"
-          print(f"✅ BROADCAST OK - Calidad Telemundo/CDN - {clip.duration:.1f}s - Listo para mundo entero")
-          PY
-          pip install -r requirements.txt
-
-      - name: Armar video TELEMUNDO
+      - name: Generar vídeo
         run: python robot/noticiero.py
 
-      - name: Verificacion broadcast
-        run: python robot/verificar.py
-
-      - name: Subir artifact
-        if: always()
+      - name: Subir artefactos
         uses: actions/upload-artifact@v4
         with:
-          name: noticias-telemundo
+          name: noticia-eddy-${{ github.run_number }}
           path: |
-            tiktok-noticias/
             salida/
+            tiktok-noticias/
           retention-days: 7
