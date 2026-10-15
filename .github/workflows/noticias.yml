@@ -1,4 +1,4 @@
-name: Noticias con Eddy - TELEMUNDO + DRIVE
+name: Noticias con Eddy - TELEMUNDO
 
 on:
   workflow_dispatch:
@@ -19,7 +19,6 @@ jobs:
     env:
       SALIDA: salida
       TZ: America/Santo_Domingo
-      FOLDER_ID: 1irln1wOl_FBIOUFAL7d5JrRRU4mDQ8qv
 
     steps:
       - uses: actions/checkout@v4
@@ -224,23 +223,3 @@ jobs:
             salida/
             tiktok-noticias/
           retention-days: 7
-
-      - name: Subir vídeo a Google Drive
-        if: always()
-        uses: adityak74/google-drive-upload-git-action@main
-        with:
-          credentials: ${{ secrets.GDRIVE_CREDENTIALS }}
-          folderId: ${{ env.FOLDER_ID }}
-          filename: salida/ultima_noticia.mp4
-          overwrite: "true"
-          mirrorDirectoryStructure: "false"
-
-      - name: Subir caption a Google Drive
-        if: always()
-        uses: adityak74/google-drive-upload-git-action@main
-        with:
-          credentials: ${{ secrets.GDRIVE_CREDENTIALS }}
-          folderId: ${{ env.FOLDER_ID }}
-          filename: salida/caption.txt
-          overwrite: "true"
-          mirrorDirectoryStructure: "false"
