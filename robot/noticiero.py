@@ -8,7 +8,6 @@ from zoneinfo import ZoneInfo
 from PIL import Image, ImageDraw, ImageFilter
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from sello import *  # noqa  (W,H,FPS,PX,PY,PW,PH,colores,fuentes,Sello,ctext,fit,tw,ease,tts_texto,restaurar)
-
 TZ = ZoneInfo("America/Santo_Domingo"); AQ = os.path.dirname(os.path.abspath(__file__))
 SAL = os.environ.get("SALIDA", "salida"); VOZ = os.environ.get("VOZ", "es-MX-JorgeNeural")
 PROHIBIDAS = re.compile(r"loter|sorteo|quiniela|leidsa|loteka|\bloto\b|kino|\bpal[eé]\b|apuesta|jackpot|premio mayor|para ganar|\bseguro\b|el solo uno", re.I)
@@ -20,7 +19,6 @@ def get(url, data=None, headers=None, timeout=120):
     r = urllib.request.Request(url, data, {**UA, **(headers or {})}); return urllib.request.urlopen(r, timeout=timeout).read()
 def limpiar(t):
     t = html.unescape(re.sub(r"<[^>]+>", " ", html.unescape(t or ""))); return re.sub(r"\s+", " ", t).strip()
-
 # ---------- 1. FUENTES ----------
 def leer_feed(f, region, horas=24):
     try: raiz = ET.fromstring(get(f["url"], timeout=30))
@@ -43,7 +41,6 @@ def leer_feed(f, region, horas=24):
         if PROHIBIDAS.search(tit + " " + cuerpo): continue
         out.append({"region": region, "medio": f["nombre"], "titulo": tit, "resumen": cuerpo[:700], "fecha": fe.isoformat(), "link": c.get("link") or ""})
     return out
-
 def candidatas():
     fs = json.load(open(os.path.join(AQ, "fuentes.json"))); todas = []
     for reg in ("rd", "mundo"):
@@ -54,7 +51,6 @@ def candidatas():
         k = re.sub(r"\W+", "", n["titulo"].lower())[:40]
         if k not in vistos: vistos.add(k); out.append(n)
     return out
-
 # ---------- 2. REDACCION IA ----------
 SISTEMA = """Eres el redactor de "Noticias con Eddy", un noticiero dominicano para TikTok y YouTube al estilo Telemicro / Teleantillas: directo, claro, con energía, español dominicano neutro.
 Reglas OBLIGATORIAS:
@@ -69,7 +65,6 @@ def pedir_ia(cands, hoy):
     usuario = f"""Hoy es {DIAS[hoy.weekday()]} {hoy.day} de {MESES[hoy.month-1]} de {hoy.year}.
 Noticias disponibles:
 {lista}
-
 Elige las 5 o 6 noticias más importantes e interesantes (al menos 3 de RD y al menos 1 del mundo; temas distintos).
 Arma un guion de 2 min 20 s en total (330 a 380 palabras sumando todo). JSON con esta forma:
 {{"gancho": "1 o 2 frases (máx. 22 palabras) que abren con el DATO MÁS FUERTE del día (una cifra o hecho impactante) y dicen el medio",
@@ -86,10 +81,10 @@ Arma un guion de 2 min 20 s en total (330 a 380 palabras sumando todo). JSON con
     for intento in range(4):
         try:
             if clave:
-                r = json.loads(get(f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={clave}",
+                r = json.loads(get(f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={clave}",
                     json.dumps({"systemInstruction": {"parts": [{"text": SISTEMA}]}, "contents": [{"parts": [{"text": usuario}]}],
                                 "generationConfig": {"responseMimeType": "application/json", "temperature": 0.7}}).encode(), {"Content-Type": "application/json"}))
-                txt = r["candidates"][0]["content"]["parts"][0]["text"]; motor = "gemini-2.5-flash"
+                txt = r["candidates"][0]["content"]["parts"][0]["text"]; motor = "gemini-1.5-flash"
             else:
                 r = json.loads(get("https://text.pollinations.ai/openai", json.dumps({"model": "openai", "messages": msgs,
                     "response_format": {"type": "json_object"}, "seed": random.randint(1, 99999)}).encode(), {"Content-Type": "application/json"}, 240))
@@ -103,7 +98,6 @@ Arma un guion de 2 min 20 s en total (330 a 380 palabras sumando todo). JSON con
         except Exception as e:
             log("IA falla", intento, e); time.sleep(15)
     sys.exit("La IA no entregó un guion válido: no se arma video.")
-
 def _n(x): return [w for w in re.findall(r"\w+", unicodedata.normalize("NFC", x.lower()))]
 def copia_max(texto, fuente):
     a, b = _n(texto), _n(fuente); s = {tuple(b[i:i+6]) for i in range(len(b)-5)}
@@ -125,7 +119,6 @@ def revisar_guion(g, cands):
         if c["medio"].lower().split()[-1] not in n["texto"].lower(): p.append(f"la noticia {n['i']} debe citar a {c['medio']}")
         if copia_max(n["texto"], c["titulo"] + " " + c["resumen"]) > 0: p.append(f"la noticia {n['i']} copia frases de la fuente; reescribe con tus palabras")
     return p
-
 # ---------- 3. IMAGENES IA (nunca fotos de medios) ----------
 ESTILO = ", editorial news illustration, cinematic photorealistic, dramatic lighting, high detail, 4k, no text, no letters, no watermark, no logos"
 def imagen_ia(prompt, ruta, semilla):
@@ -136,11 +129,9 @@ def imagen_ia(prompt, ruta, semilla):
             if im.width >= 800: im.save(ruta, quality=92); return True
         except Exception as e: log("imagen falla", i, e); time.sleep(10 + 10*i)
     return False
-
 def recorta(im):
     r = max(PW/im.width, PH/im.height); im = im.resize((int(im.width*r)+1, int(im.height*r)+1), Image.LANCZOS)
     return im.crop(((im.width-PW)//2, (im.height-PH)//2, (im.width-PW)//2+PW, (im.height-PH)//2+PH))
-
 def panel_imagen(ruta, dato, linea):
     if ruta and os.path.exists(ruta): base = recorta(Image.open(ruta).convert("RGB"))
     else: base = Image.new("RGB", (PW, PH), NAVY)
@@ -153,7 +144,6 @@ def panel_imagen(ruta, dato, linea):
         f = fit(d, linea.upper(), BLK, 56, PW-80); w = tw(d, linea.upper(), f)[0]
         d.rectangle([PW/2-w/2-24, PH-120, PW/2+w/2+24, PH-40], fill=RED); ctext(d, linea.upper(), f, PW/2, PH-108, WHITE)
     return base
-
 def panel_gancho(cifra, linea, ruta=None):
     im = panel_imagen(ruta, None, None) if ruta else Image.new("RGB", (PW, PH), NAVY)
     ov = Image.new("RGBA", (PW, PH), (10, 31, 77, 170)); im = Image.alpha_composite(im.convert("RGBA"), ov).convert("RGB"); d = ImageDraw.Draw(im)
@@ -172,7 +162,6 @@ def panel_cierre():
     im = Image.new("RGB", (PW, PH), RED); d = ImageDraw.Draw(im)
     ctext(d, "SÍGUEME", F(ANTON, 200), PW/2, 120, WHITE); ctext(d, "Y COMENTA", F(ANTON, 130), PW/2, 380, YEL)
     ctext(d, "@eddy_infante · @VIPFuerte", F(BLK, 54), PW/2, 600, WHITE); return im
-
 # ---------- 4. VOZ ----------
 async def _voz(texto, ruta):
     import edge_tts
@@ -190,7 +179,6 @@ def voz(texto, ruta):
         except Exception as e: log("voz falla", i, e); time.sleep(5)
     raise RuntimeError("voz")
 def durac(r): return float(subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", r]).decode())
-
 # ---------- 5. ARMADO ----------
 def main():
     os.makedirs(f"{SAL}/tmp", exist_ok=True); os.makedirs(f"{SAL}/imagenes", exist_ok=True)
@@ -256,6 +244,5 @@ def main():
     open(f"{SAL}/descripcion.txt", "w").write(g["gancho"] + "\n\nFuentes (redactado con palabras propias; imágenes ilustrativas generadas con IA):\n" +
         "\n".join(f"- {x['medio']} ({x['fecha'][:10]}): {x['link']}" for x in fuentes) + "\n\n#NoticiasRD #RepúblicaDominicana #Noticias")
     for fr_t in (1, 4, 30, 70, 110): subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", str(fr_t), "-i", f"{SAL}/video.mp4", "-frames:v", "1", "-vf", "scale=360:-1", f"{SAL}/cuadro-{fr_t}s.jpg"])
-
 if __name__ == "__main__":
     main()
