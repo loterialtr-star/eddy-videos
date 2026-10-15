@@ -1,4 +1,4 @@
-name: Noticias con Eddy - TELEMUNDO + YOUTUBE
+name: Noticias con Eddy - TELEMUNDO + DRIVE
 
 on:
   workflow_dispatch:
@@ -19,6 +19,7 @@ jobs:
     env:
       SALIDA: salida
       TZ: America/Santo_Domingo
+      FOLDER_ID: 1irln1wOl_FBIOUFAL7d5JrRRU4mDQ8qv
 
     steps:
       - uses: actions/checkout@v4
@@ -41,8 +42,8 @@ jobs:
           requests
           imageio-ffmpeg
           google-api-python-client
+          google-auth
           google-auth-httplib2
-          google-auth-oauthlib
           REQ
 
           pip install -r requirements.txt
@@ -218,51 +219,37 @@ jobs:
       - name: Generar vídeo
         run: python robot/noticiero.py
 
-      - name: Publicar en YouTube
+      - name: Subir a Google Drive (API oficial)
         env:
-          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
-          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
-          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
+          FOLDER_ID: ${{ env.FOLDER_ID }}
         run: |
           python - << 'PY'
-          import os
+          import os, base64, json
+          from google.oauth2 import service_account
           from googleapiclient.discovery import build
           from googleapiclient.http import MediaFileUpload
-          from google.oauth2.credentials import Credentials
 
-          creds = Credentials(
-              None,
-              refresh_token=os.environ["YT_REFRESH_TOKEN"],
-              token_uri="https://oauth2.googleapis.com/token",
-              client_id=os.environ["YT_CLIENT_ID"],
-              client_secret=os.environ["YT_CLIENT_SECRET"]
+          creds_b64 = os.environ["GDRIVE_CREDENTIALS"]
+          creds_json = base64.b64decode(creds_b64).decode("utf-8")
+          creds_info = json.loads(creds_json)
+
+          credentials = service_account.Credentials.from_service_account_info(
+              creds_info,
+              scopes=["https://www.googleapis.com/auth/drive"]
           )
 
-          youtube = build("youtube", "v3", credentials=creds)
+          service = build("drive", "v3", credentials=credentials)
+          folder_id = os.environ["FOLDER_ID"]
 
-          with open("salida/caption.txt", encoding="utf-8") as f:
-              titulo = f.read().strip()[:95]
+          def subir(ruta, nombre):
+              metadata = {"name": nombre, "parents": [folder_id]}
+              media = MediaFileUpload(ruta, resumable=True)
+              file = service.files().create(body=metadata, media_body=media, fields="id,name").execute()
+              print(f"✅ Subido a Drive: {file.get('name')} (ID: {file.get('id')})")
 
-          descripcion = f"{titulo}\n\nNoticias con Eddy | República Dominicana\n#Noticias #RD #EddyInfante #UltimaHora"
-
-          request = youtube.videos().insert(
-              part="snippet,status",
-              body={
-                  "snippet": {
-                      "title": titulo,
-                      "description": descripcion,
-                      "tags": ["noticias", "republica dominicana", "eddy infante", "ultima hora", "rd"],
-                      "categoryId": "25"
-                  },
-                  "status": {
-                      "privacyStatus": "public",
-                      "selfDeclaredMadeForKids": False
-                  }
-              },
-              media_body=MediaFileUpload("salida/ultima_noticia.mp4", chunksize=-1, resumable=True)
-          )
-          response = request.execute()
-          print("✅ Publicado en YouTube:", "https://youtu.be/" + response["id"])
+          subir("salida/ultima_noticia.mp4", "ultima_noticia.mp4")
+          subir("salida/caption.txt", "caption.txt")
           PY
 
       - name: Subir artefactos (respaldo)
