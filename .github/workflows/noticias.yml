@@ -1,4 +1,4 @@
-    name: Noticias con Eddy - TELEMUNDO + CORREO
+ name: Noticias con Eddy - TELEMUNDO + CORREO
 
 on:
   workflow_dispatch:
