@@ -4,9 +4,7 @@ on:
   schedule:
     # Se ejecuta automáticamente cada 4 horas
     - cron: '0 */4 * * *'
-
 concurrency: noticias
-
 jobs:
   video:
     runs-on: ubuntu-latest
@@ -14,30 +12,23 @@ jobs:
     env:
       SALIDA: salida
       TZ: America/Santo_Domingo
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
       - name: Instalar dependencias del sistema
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
-
       - name: Instalar dependencias Python
-        run: pip install -r requisitos.txt
-
+        run: pip install -r requirements.txt
       - name: Armar video
         run: python robot/noticiero.py
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-
       - name: Controles automaticos (si falla, no se publica)
         run: python robot/verificar.py
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-
       - name: Subir artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -47,7 +38,6 @@ jobs:
             salida/*.*
             salida/imagenes/
           retention-days: 7
-
       - name: Publicar en YouTube (apagado hasta que Eddy conecte la cuenta)
         continue-on-error: true
         env:
@@ -56,7 +46,6 @@ jobs:
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
         run: python robot/publicar_youtube.py
-
       - name: Publicar en pagina de noticias de Facebook (NUNCA Primero Dios; apagado)
         continue-on-error: true
         env:
@@ -66,7 +55,6 @@ jobs:
           FB_PAGE_TOKEN: ${{ secrets.FB_NOTICIAS_TOKEN }}
           FB_PRIMERO_DIOS_ID: ${{ secrets.FB_PRIMERO_DIOS_ID }}
         run: python robot/publicar_facebook.py
-
       - name: Subir a Google Drive
         uses: adityak74/google-drive-upload-git-action@main
         with:
