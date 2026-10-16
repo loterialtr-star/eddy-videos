@@ -1,25 +1,53 @@
-name: CI — Sanity check
+name: Pipeline Eddy — Fe + Viral + CI
 
+# ============================================================
+# Un solo workflow para todo:
+#   · push/PR      → lint + tests (job "check")
+#   · 10:30 UTC    → carrete de fe         (job "fe")
+#   · 13:00 UTC    → viral 8 nichos FB     (job "viral")
+#   · 20:00 UTC    → viral 8 nichos YT     (job "viral")
+#   · manual       → eliges tú en la UI
+# ============================================================
 on:
   push:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  schedule:
+    - cron: "30 10 * * *"   # 10:30 UTC = 06:30 La Paz → Fe
+    - cron: "0 13 * * *"    # 13:00 UTC = 09:00 La Paz → Viral FB
+    - cron: "0 20 * * *"    # 20:00 UTC = 16:00 La Paz → Viral YT
   workflow_dispatch:
+    inputs:
+      modo:
+        description: "Qué ejecutar"
+        required: true
+        default: "todo"
+        type: choice
+        options: [todo, viral, fe, check]
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: pipeline-${{ github.ref }}-${{ github.event.schedule || 'manual' }}
+  cancel-in-progress: false
 
+permissions:
+  contents: write
+
+# ============================================================
 jobs:
+
+  # ---------- 1. CI: lint y tests ----------
   check:
-    name: Lint y sintaxis
+    name: Lint y tests
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'workflow_dispatch' && (inputs.modo == 'check' || inputs.modo == 'todo'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup Python 3.12
         uses: actions/setup-python@v5
@@ -27,7 +55,7 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: Instalar ffmpeg (necesario por si algún módulo lo importa)
+      - name: Instalar ffmpeg y fuentes
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
@@ -38,19 +66,133 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install flake8 pytest
 
-      - name: Lint con flake8 — solo errores fatales
+      - name: Lint — solo errores fatales
         run: |
           flake8 . --count --select=E9,F63,F7,F82 \
             --show-source --statistics \
-            --exclude=.git,__pycache__,outputs,salida-fe
+            --exclude=.git,__pycache__,outputs,salida-fe,.venv
           flake8 . --count --exit-zero --max-complexity=10 \
             --max-line-length=127 --statistics \
-            --exclude=.git,__pycache__,outputs,salida-fe
+            --exclude=.git,__pycache__,outputs,salida-fe,.venv
 
-      - name: Test con pytest (si hay tests)
+      - name: Pytest si hay tests
         run: |
           if find . -name "test_*.py" -o -name "*_test.py" | grep -q .; then
             pytest -q
           else
             echo "No hay tests, se omite pytest"
           fi
+
+  # ---------- 2. Carrete de fe (Primero Dios) ----------
+  fe:
+    name: Carrete de fe
+    if: |
+      github.event.schedule == '30 10 * * *' ||
+      (github.event_name == 'workflow_dispatch' && (inputs.modo == 'fe' || inputs.modo == 'todo'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: []   # corre siempre, no depende de check
+
+    env:
+      SALIDA: salida-fe
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar ffmpeg y fuentes
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Armar reel
+        run: python robot/armar_fe.py
+
+      - name: Verificar reel
+        run: python robot/verificar_fe.py
+
+      - name: Subir artefacto
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reel-fe
+          path: salida-fe/*.*
+          retention-days: 7
+
+      - name: Publicar en Primero Dios (apagado hasta confirmación)
+        id: pub
+        env:
+          PUBLICAR: ${{ vars.PUBLICAR_FE }}
+          TIPO: fe
+          FB_PAGE_ID: ${{ secrets.FB_PRIMERO_DIOS_ID }}
+          FB_PAGE_TOKEN: ${{ secrets.FB_PRIMERO_DIOS_TOKEN }}
+        run: python robot/publicar_facebook.py | tee pub.log
+
+      - name: Marcar historia como usada (solo si se publicó)
+        run: |
+          grep -q "^Facebook:" pub.log || exit 0
+          python -c "import json;u=json.load(open('robot/fe/usadas.json'));u['usadas'].append(json.load(open('salida-fe/fe.json'))['historia_id']);json.dump(u,open('robot/fe/usadas.json','w'))"
+          git config user.name robot
+          git config user.email robot@users.noreply.github.com
+          git add robot/fe/usadas.json
+          if ! git diff --staged --quiet; then
+            git commit -m "fe: historia usada [skip ci]"
+            git push
+          fi
+
+  # ---------- 3. Generador viral 8 nichos ----------
+  viral:
+    name: Generador viral 8 nichos
+    if: |
+      github.event.schedule == '0 13 * * *' ||
+      github.event.schedule == '0 20 * * *' ||
+      (github.event_name == 'workflow_dispatch' && (inputs.modo == 'viral' || inputs.modo == 'todo'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: []
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar ffmpeg y fuentes
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install edge-tts pillow
+
+      - name: Generar video
+        run: python main.py
+
+      - name: Subir artefactos
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: videos-del-dia
+          path: |
+            *.png
+            *.mp3
+            *.txt
+          retention-days: 7
