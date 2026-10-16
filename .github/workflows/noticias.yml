@@ -1,29 +1,66 @@
+name: Carrete de fe (Primero Dios)
 
-name: Reel de fe (Primero Dios)
-# Regla: franja 06:00-09:30 La Paz con 4 h de separacion => solo cabe 1 reel al dia (06:30 La Paz = 10:30 UTC).
+# Regla: franja 06:00-09:30 La Paz con 4 h de separación
+# => solo cabe 1 carrete al día (06:30 La Paz = 10:30 UTC).
+# Nota: La Paz no cambia de horario (UTC-4 fijo), así que 10:30 UTC siempre
+# son las 06:30 en Bolivia.
+
 on:
-  workflow_dispatch:
   schedule:
-    - cron: "30 10 * * *"
-concurrency: fe
-permissions: { contents: write }
+    - cron: "30 10 * * *"    # 10:30 UTC = 06:30 La Paz
+  workflow_dispatch:          # permite dispararlo a mano para probar
+
+concurrency:
+  group: fe
+  cancel-in-progress: false
+
+permissions:
+  contents: write             # necesario para el commit de usadas.json
+
 jobs:
   fe:
+    name: Reel de fe
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env: { SALIDA: salida-fe }
+
+    env:
+      SALIDA: salida-fe
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.12" }
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
-      - run: pip install -r requirements.txt
-      - run: python robot/armar_fe.py
-      - run: python robot/verificar_fe.py
-      - uses: actions/upload-artifact@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar ffmpeg y fuentes
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Armar reel
+        run: python robot/armar_fe.py
+
+      - name: Verificar reel
+        run: python robot/verificar_fe.py
+
+      - name: Subir artefacto
         if: always()
-        with: { name: reel-fe, path: "salida-fe/*.*", retention-days: 7 }
-      - name: Publicar en Primero Dios (apagado hasta confirmacion)
+        uses: actions/upload-artifact@v4
+        with:
+          name: reel-fe
+          path: salida-fe/*.*
+          retention-days: 7
+
+      - name: Publicar en Primero Dios (apagado hasta confirmación)
         id: pub
         env:
           PUBLICAR: ${{ vars.PUBLICAR_FE }}
@@ -31,9 +68,13 @@ jobs:
           FB_PAGE_ID: ${{ secrets.FB_PRIMERO_DIOS_ID }}
           FB_PAGE_TOKEN: ${{ secrets.FB_PRIMERO_DIOS_TOKEN }}
         run: python robot/publicar_facebook.py | tee pub.log
-      - name: Marcar historia como usada (solo si se publico)
+
+      - name: Marcar historia como usada (solo si se publicó)
         run: |
           grep -q "^Facebook:" pub.log || exit 0
-          python -c "import json;u=json.load(open('robot/fe/usadas.json'));u['usadas'].append(json.load(open('salida-fe/fe.json'))['historia_id']);json.dump(u,open('robot/fe/usadas.json','w'))"
-          git config user.name robot && git config user.email robot@users.noreply.github.com
-          git commit -am "fe: historia usada" && git push
+          python -c "import json; u=json.load(open('robot/fe/usadas.json')); u['usadas'].append(json.load(open('salida-fe/fe.json'))['historia_id']); json.dump(u, open('robot/fe/usadas.json','w'))"
+          git config user.name robot
+          git config user.email robot@users.noreply.github.com
+          git add robot/fe/usadas.json
+          git commit -m "fe: historia usada [skip ci]"
+          git push
