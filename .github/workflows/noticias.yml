@@ -1,165 +1,83 @@
-#!/usr/bin/env python3
-"""Robot de Noticias con Eddy - Busca en Google News y genera video de ~1:30 minutos.
-Tú descargas el video del Artifact."""
-import asyncio
-import datetime as dt
-import html
-import os
-import re
-import subprocess
-import sys
-import textwrap
-import urllib.parse
-import urllib.request
-import xml.etree.ElementTree as ET
-from zoneinfo import ZoneInfo
-from PIL import Image, ImageDraw, ImageFont
-import edge_tts
+name: Noticias
 
-TZ = ZoneInfo("America/Santo_Domingo")
-SAL = os.environ.get("SALIDA", "salida")
-VOZ = os.environ.get("VOZ", "es-MX-JorgeNeural")
-DURACION_OBJETIVO = 90  # 1 minuto 30 segundos
-os.makedirs(SAL, exist_ok=True)
-os.makedirs(f"{SAL}/imagenes", exist_ok=True)
-os.makedirs(f"{SAL}/audio", exist_ok=True)
+on:
+  schedule:
+    # Todos los días a las 08:00 UTC (04:00 RD)
+    - cron: '0 8 * * *'
+  push:
+    branches: [ main ]
+    paths:
+      - '**.md'
+      - 'noticias/**'
+      - '.github/workflows/noticias.yml'
+  workflow_dispatch:
+    inputs:
+      categoria:
+        description: 'Categoría de noticias a procesar'
+        required: false
+        default: 'todas'
+        type: choice
+        options:
+          - todas
+          - nacionales
+          - internacionales
+          - tecnologia
+          - deportes
 
-def log(*a):
-    print(*a, flush=True)
+jobs:
+  generar-noticias:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
-def get(url, timeout=30):
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Noticias Eddy)"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return r.read()
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-def limpiar(t):
-    if not t:
-        return ""
-    t = html.unescape(re.sub(r"<[^>]+>", " ", t))
-    return re.sub(r"\s+", " ", t).strip()
+      - name: Setup Node (cambia a Python si prefieres)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
 
-def buscar_google_news():
-    queries = [
-        "República Dominicana when:1d",
-        "Policía Nacional República Dominicana when:1d",
-        "noticias República Dominicana when:12h",
-        "mundo when:1d",
-    ]
-    noticias = []
-    vistos = set()
-    for q in queries:
-        url = "https://news.google.com/rss/search?" + urllib.parse.urlencode({
-            "q": q, "hl": "es-419", "gl": "DO", "ceid": "DO:es"
-        })
-        try:
-            xml = get(url)
-            root = ET.fromstring(xml)
-            for item in root.findall(".//item")[:4]:
-                titulo = limpiar(item.findtext("title") or "")
-                desc = limpiar(item.findtext("description") or "")
-                fuente = item.findtext("source") or "Google News"
-                key = re.sub(r"\W+", "", titulo.lower())[:50]
-                if key and key not in vistos and len(titulo) > 15:
-                    vistos.add(key)
-                    noticias.append({
-                        "titulo": titulo,
-                        "resumen": desc[:220],
-                        "fuente": fuente
-                    })
-        except Exception as e:
-            log("Error búsqueda:", q, e)
-        if len(noticias) >= 4:
-            break
-    return noticias[:4]
+      # Si usas Python, reemplaza el paso anterior con:
+      # - uses: actions/setup-python@v5
+      #   with:
+      #     python-version: '3.11'
 
-def crear_frame(texto, idx, total, fuente):
-    W, H = 1080, 1920
-    img = Image.new("RGB", (W, H), (10, 20, 50))
-    draw = ImageDraw.Draw(img)
-    try:
-        font_big = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 48)
-        font_med = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 34)
-        font_sm = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 26)
-    except:
-        font_big = font_med = font_sm = ImageFont.load_default()
+      - name: Instalar dependencias
+        run: |
+          if [ -f package.json ]; then npm ci; fi
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    draw.rectangle([0, 0, W, 130], fill=(180, 20, 40))
-    draw.text((40, 35), "NOTICIAS CON EDDY", font=font_big, fill="white")
+      - name: Ejecutar generador de noticias
+        env:
+          CATEGORIA: ${{ inputs.categoria || 'todas' }}
+          NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
+        run: |
+          echo "Generando noticias para categoría: $CATEGORIA"
+          # Pon aquí tu script real:
+          # node scripts/noticias.js
+          # o
+          # python scripts/noticias.py
+          
+          # Ejemplo temporal - crea un archivo de ejemplo
+          mkdir -p noticias
+          echo "# Noticias - $(date -I)" > noticias/$(date +%Y-%m-%d).md
+          echo "" >> noticias/$(date +%Y-%m-%d).md
+          echo "Actualizado automáticamente por GitHub Actions" >> noticias/$(date +%Y-%m-%d).md
 
-    y = 220
-    for line in textwrap.wrap(texto, width=26)[:7]:
-        draw.text((50, y), line, font=font_med, fill="white")
-        y += 65
-
-    draw.rectangle([0, H-200, W, H], fill=(0, 0, 0))
-    draw.text((40, H-160), f"Fuente: {fuente}", font=font_sm, fill=(200, 200, 200))
-    draw.text((40, H-110), f"{idx+1}/{total}", font=font_sm, fill="white")
-    draw.text((W-360, H-70), "@eddy_infante", font=font_sm, fill="white")
-
-    path = f"{SAL}/imagenes/frame_{idx:02d}.jpg"
-    img.save(path, quality=92)
-    return path
-
-async def generar_audio(texto, path):
-    communicate = edge_tts.Communicate(texto, VOZ, rate="-8%")
-    await communicate.save(path)
-    tmp = path.replace(".mp3", "_n.mp3")
-    subprocess.run(["ffmpeg", "-y", "-i", path, "-filter:a", "loudnorm=I=-14:TP=-1.5", tmp, "-loglevel", "error"], check=False)
-    if os.path.exists(tmp):
-        os.replace(tmp, path)
-
-def main():
-    log("Buscando noticias en Google News...")
-    noticias = buscar_google_news()
-    log(f"Encontradas: {len(noticias)}")
-
-    if not noticias:
-        noticias = [{
-            "titulo": "Sin noticias nuevas en este momento",
-            "resumen": "Te informamos Eddy Infante. Mantente atento.",
-            "fuente": "Noticias con Eddy"
-        }]
-
-    # Ajustar cantidad de noticias para llegar cerca de 1:30
-    partes = []
-    for n in noticias:
-        partes.append(f"{n['titulo']}. Según {n['fuente']}. {n['resumen']}")
-    guion = "Atención República Dominicana. Te habla Eddy Infante. " + " ".join(partes) + " Con Dios por delante, te informó Eddy Infante. Sígueme y comenta."
-
-    frames = []
-    for i, n in enumerate(noticias):
-        frames.append(crear_frame(n["titulo"], i, len(noticias), n["fuente"]))
-
-    audio_path = f"{SAL}/audio/voz.mp3"
-    asyncio.run(generar_audio(guion, audio_path))
-
-    # Calcular duración por frame para acercarse a 90 segundos
-    num_frames = len(frames)
-    dur_por_frame = max(6.0, DURACION_OBJETIVO / max(num_frames, 1))
-
-    list_file = f"{SAL}/tmp_list.txt"
-    with open(list_file, "w") as f:
-        for fr in frames:
-            f.write(f"file '{os.path.abspath(fr)}'\nduration {dur_por_frame:.1f}\n")
-        f.write(f"file '{os.path.abspath(frames[-1])}'\n")
-
-    video_out = f"{SAL}/video.mp4"
-    cmd = [
-        "ffmpeg", "-y",
-        "-f", "concat", "-safe", "0", "-i", list_file,
-        "-i", audio_path,
-        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "20",
-        "-c:a", "aac", "-b:a", "128k",
-        "-shortest", "-movflags", "+faststart",
-        video_out
-    ]
-    subprocess.run(cmd, check=True)
-
-    open(f"{SAL}/guion.txt", "w", encoding="utf-8").write(guion)
-    open(f"{SAL}/titulo.txt", "w", encoding="utf-8").write(noticias[0]["titulo"][:90])
-    open(f"{SAL}/descripcion.txt", "w", encoding="utf-8").write(guion[:500] + "\n\n#NoticiasRD #EddyInfante")
-
-    log(f"VIDEO LISTO (~1:30): {video_out}")
+      - name: Commit y push si hay cambios
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add noticias/ || true
+          if git diff --staged --quiet; then
+            echo "No hay cambios para commitear"
+          else
+            git commit -m "chore: actualiza noticias $(date +%Y-%m-%d) [skip ci]"
+            git push
+          fi
 
 if __name__ == "__main__":
     main()
